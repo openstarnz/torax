@@ -93,7 +93,7 @@ class SimTestCase(parameterized.TestCase):
   ):
     """Gets reference values for the requested state profiles."""
     expected_results_path = self._expected_results_path(ref_name)
-    self.assertTrue(os.path.exists(expected_results_path))
+    self.assertTrue(os.path.exists(expected_results_path), expected_results_path)
     data_tree = output.safe_load_dataset(expected_results_path)
     core_profiles_dataset = data_tree.children[output.CORE_PROFILES].dataset
     self.assertNotEmpty(profiles)

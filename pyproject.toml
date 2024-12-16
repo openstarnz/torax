@@ -58,6 +58,7 @@ dev = [
     "sphinx_copybutton",
     "sphinx_design",
     "sphinx_remove_toctrees",
+    "pytest_env",
 ]
 
 [tool.pyink]
@@ -80,6 +81,10 @@ addopts = [
     "--ignore-glob=*lib*",
     # Leads to an ImportError in collection for `pytest` without qualikiz_tools.
     "--ignore=torax/transport_model/qualikiz_wrapper.py",
+    "-n 128",
 ]
 testpaths = "**/tests"
 python_files = "*.py"
+
+[tool.pytest_env]
+TORAX_ERRORS_ENABLED = 1

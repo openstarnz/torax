@@ -109,7 +109,7 @@ class RunSimulationMainTest(parameterized.TestCase):
     with self.assertRaises(SystemExit) as cm:
       app.run(run_simulation_main.main)
     # Make sure the app ran successfully
-    self.assertIsNone(cm.exception.code)
+    self.assertIsNone(cm.exception.code, cm.exception)
 
     output = output_lib.load_state_file(
         "/tmp/torax_test_output/state_history.nc"

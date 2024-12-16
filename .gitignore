@@ -11,6 +11,7 @@ _pycache__/
 build/
 dist/
 poetry.lock
+venv/
 
 # Tests
 .pytest_cache/
@@ -20,6 +21,7 @@ poetry.lock
 
 # Other
 *.DS_Store
+.vscode/launch.json
 
 # PyCharm
 .idea

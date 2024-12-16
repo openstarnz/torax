@@ -51,6 +51,7 @@ _TORIC_GRID_SIZE = 297
 _HELIUM3_ID = 'He3'
 _TRITIUM_SECOND_HARMONIC_ID = '2T'
 _ELECTRON_ID = 'e'
+JSON_RETRY_ATTEMPTS = 1000
 
 
 def _get_default_model_path() -> str:
@@ -58,10 +59,19 @@ def _get_default_model_path() -> str:
 
 
 def _from_json(json_file) -> dict[str, Any]:
-  """Load the model config and weights from a JSON file."""
-  with open(json_file) as file_:
-    model_dict = json.load(file_)
-  return model_dict
+  """
+  Load the model config and weights from a JSON file.
+  When running tests in parallel, there are issues with reading the same file simultaneously,
+  so we retry reading it up to a maximum of JSON_RETRY_ATTEMPTS.
+  """
+  err = None
+  for _ in range(JSON_RETRY_ATTEMPTS):
+    try:
+      with open(json_file, 'r') as f:
+        return json.load(f)
+    except Exception as e:
+      err = e
+  raise err
 
 
 # pylint: disable=invalid-name
