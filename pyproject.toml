@@ -83,7 +83,6 @@ addopts = [
     "--ignore=torax/transport_model/qualikiz_wrapper.py",
     "-n 128",
 ]
-testpaths = "**/tests"
 python_files = "*.py"
 
 [tool.pytest_env]
