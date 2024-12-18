@@ -21,6 +21,7 @@ import functools
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from torax import constants
 from torax import geometry
 from torax import jax_utils
@@ -625,6 +626,16 @@ def _calc_coeffs_full(
   full_chi_face_el += chi_face_per_el
   full_d_face_el += d_face_per_el
   full_v_face_el += v_face_per_el
+
+  # Convection term
+  # To maintaing quasineutrality, the electron particle convection and diffusion coefficients must be the same
+  # TODO: Check if just using core_profiles is fine
+  # ion_heat_convection = 5 / 2 * (geo.g0_face * true_ni_face * v_face_el - d_face_el * geo.g1_over_vpr_face * core_profiles.ni.face_grad() * dynamic_runtime_params_slice.numerics.nref) * consts.keV2J
+  el_heat_convection = 5 / 2 * (geo.g0_face * true_ne_face * v_face_el - d_face_el * geo.g1_over_vpr_face * core_profiles.ne.face_grad() * dynamic_runtime_params_slice.numerics.nref)
+
+  # print(full_chi_face_ion / ion_heat_convection)
+  np.set_printoptions(suppress=True)
+  print((full_chi_face_el-chi_face_per_el) * core_profiles.temp_el.face_grad() / consts.keV2J / (el_heat_convection * core_profiles.temp_el.face_value()))
 
   # Add phibdot terms to heat transport convection
   v_heat_face_ion += (
