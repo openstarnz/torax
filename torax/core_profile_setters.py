@@ -54,8 +54,7 @@ def updated_ion_temperature(
   )
   temp_ion = cell_variable.CellVariable(
       value=dynamic_runtime_params_slice.profile_conditions.Ti,
-      left_face_grad_constraint=jnp.zeros(()),
-      right_face_grad_constraint=None,
+      left_face_grad_constraint=jnp.array(0.0),
       right_face_constraint=Ti_bound_right,
       dr=geo.drho_norm,
   )
@@ -79,8 +78,7 @@ def updated_electron_temperature(
   )
   temp_el = cell_variable.CellVariable(
       value=dynamic_runtime_params_slice.profile_conditions.Te,
-      left_face_grad_constraint=jnp.zeros(()),
-      right_face_grad_constraint=None,
+      left_face_grad_constraint=jnp.array(0.0),
       right_face_constraint=Te_bound_right,
       dr=geo.drho_norm,
   )
@@ -162,7 +160,7 @@ def _get_ne(
   ne = cell_variable.CellVariable(
       value=ne_value,
       dr=geo.drho_norm,
-      right_face_grad_constraint=None,
+      left_face_grad_constraint=jnp.array(0.0),
       right_face_constraint=jnp.array(ne_bound_right),
   )
   return ne
@@ -195,7 +193,7 @@ def _updated_ion_density(
   ni = cell_variable.CellVariable(
       value=ne.value * dilution_factor,
       dr=geo.drho_norm,
-      right_face_grad_constraint=None,
+      left_face_grad_constraint=jnp.array(0.0),
       right_face_constraint=jnp.array(
           ne.right_face_constraint * dilution_factor_edge
       ),
@@ -204,7 +202,7 @@ def _updated_ion_density(
   nimp = cell_variable.CellVariable(
       value=(ne.value - ni.value) / Zimp,
       dr=geo.drho_norm,
-      right_face_grad_constraint=None,
+      left_face_grad_constraint=jnp.array(0.0),
       right_face_constraint=jnp.array(
           ne.right_face_constraint - ni.right_face_constraint
       )
@@ -577,6 +575,7 @@ def _update_psi_from_j(
   psi = cell_variable.CellVariable(
       value=psi_value,
       dr=geo.drho_norm,
+      left_face_grad_constraint=jnp.array(0.0),
       right_face_grad_constraint=psi_grad_constraint,
   )
 
@@ -628,6 +627,7 @@ def _init_psi_and_current(
   if dynamic_runtime_params_slice.profile_conditions.psi is not None:
     psi = cell_variable.CellVariable(
         value=dynamic_runtime_params_slice.profile_conditions.psi,
+        left_face_grad_constraint=jnp.array(0.0),
         right_face_grad_constraint=_calculate_psi_grad_constraint(
             dynamic_runtime_params_slice,
             geo,
@@ -652,6 +652,7 @@ def _init_psi_and_current(
     # calculated and used in current diffusion equation.
     psi = cell_variable.CellVariable(
         value=geo.psi_from_Ip,
+        left_face_grad_constraint=jnp.array(0.0),
         right_face_grad_constraint=_calculate_psi_grad_constraint(
             dynamic_runtime_params_slice,
             geo,
@@ -746,9 +747,14 @@ def initial_core_profiles(
   psidot = cell_variable.CellVariable(
       value=jnp.zeros_like(geo.rho),
       dr=geo.drho_norm,
+      left_face_grad_constraint=jnp.array(0.0),
+      right_face_grad_constraint=jnp.array(0.0),
   )
   psi = cell_variable.CellVariable(
-      value=jnp.zeros_like(geo.rho), dr=geo.drho_norm
+      value=jnp.zeros_like(geo.rho),
+      dr=geo.drho_norm,
+      left_face_grad_constraint=jnp.array(0.0),
+      right_face_grad_constraint=jnp.array(0.0),
   )
   q_face = jnp.zeros_like(geo.rho_face)
   s_face = jnp.zeros_like(geo.rho_face)

@@ -83,7 +83,12 @@ class FVMTest(torax_refs.ReferenceValueTest):
 
     # Use ref_config to configure size, so we can also use ref_geo
     value = jnp.zeros(geo.torax_mesh.nx)
-    variable = cell_variable.CellVariable(value=value, dr=geo.drho)
+    variable = cell_variable.CellVariable(
+      value=value,
+      dr=geo.drho,
+      left_face_grad_constraint=jnp.array(0.0),
+      right_face_grad_constraint=jnp.array(0.0),
+    )
     # Underconstrain the left
     with self.assertRaises(AssertionError):
       dataclasses.replace(
@@ -118,7 +123,12 @@ class FVMTest(torax_refs.ReferenceValueTest):
 
     # Use ref_config to configure size, so we can also use ref_geo
     value = jnp.zeros(geo.torax_mesh.nx)
-    variable = cell_variable.CellVariable(value=value, dr=geo.drho)
+    variable = cell_variable.CellVariable(
+      value=value,
+      dr=geo.drho,
+      left_face_grad_constraint=jnp.array(0.0),
+      right_face_grad_constraint=jnp.array(0.0),
+    )
     # Overconstrain the left
     with self.assertRaises(AssertionError):
       dataclasses.replace(  # pytype: disable=wrong-arg-types  # dataclasses-replace-types
@@ -170,7 +180,12 @@ class FVMTest(torax_refs.ReferenceValueTest):
     # Make right cell different than left cell, so test catches bugs that
     # use the wrong end of the array
     value = value.at[-1].set(1)
-    variable = cell_variable.CellVariable(value=value, dr=geo.drho)
+    variable = cell_variable.CellVariable(
+      value=value,
+      dr=geo.drho,
+      left_face_grad_constraint=jnp.array(0.0),
+      right_face_grad_constraint=jnp.array(0.0),
+    )
 
     # Left side, face value constraint
     left_value = dataclasses.replace(  # pytype: disable=wrong-arg-types  # dataclasses-replace-types
@@ -220,13 +235,13 @@ class FVMTest(torax_refs.ReferenceValueTest):
     x_0 = cell_variable.CellVariable(
         value=jnp.zeros(num_cells),
         dr=dr,
-        right_face_grad_constraint=None,
+        left_face_grad_constraint=jnp.array(0.0),
         right_face_constraint=right_boundary[0],
     )
     x_1 = cell_variable.CellVariable(
         value=jnp.zeros(num_cells),
         dr=dr,
-        right_face_grad_constraint=None,
+        left_face_grad_constraint=jnp.array(0.0),
         right_face_constraint=right_boundary[1],
     )
     x = (x_0, x_1)
@@ -320,13 +335,13 @@ class FVMTest(torax_refs.ReferenceValueTest):
       x_0 = cell_variable.CellVariable(
           value=jnp.zeros(num_cells),
           dr=dx,
-          right_face_grad_constraint=None,
+          left_face_grad_constraint=jnp.array(0.0),
           right_face_constraint=right_boundary,
       )
       x_1 = cell_variable.CellVariable(
           value=jnp.zeros(num_cells),
           dr=dx,
-          right_face_grad_constraint=None,
+          left_face_grad_constraint=jnp.array(0.0),
           right_face_constraint=right_boundary,
       )
       x = (x_0, x_1)
@@ -614,7 +629,7 @@ class FVMTest(torax_refs.ReferenceValueTest):
     x_0 = cell_variable.CellVariable(
         value=jnp.zeros(num_cells),
         dr=jnp.array(1.0),
-        right_face_grad_constraint=None,
+        left_face_grad_constraint=jnp.array(0.0),
         right_face_constraint=initial_right_boundary,
     )
     # Run with different theta_imp values.
@@ -766,7 +781,7 @@ class FVMTest(torax_refs.ReferenceValueTest):
     x_0 = cell_variable.CellVariable(
         value=jnp.zeros(num_cells),
         dr=jnp.array(1.0),
-        right_face_grad_constraint=None,
+        left_face_grad_constraint=jnp.array(0.0),
         right_face_constraint=initial_right_boundary,
     )
     core_profiles_t_plus_dt = core_profile_setters.initial_core_profiles(
