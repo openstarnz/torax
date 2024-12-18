@@ -6,6 +6,8 @@ even if the flux surfaces move. However, this example demonstrates that varying 
 causes a noticeable effect on the solution, which is unphysical.
 """
 
+START_B0 = 1.0
+MID_B0 = 2.0
 
 CONFIG = {
     'runtime_params': {
@@ -31,15 +33,21 @@ CONFIG = {
         'geometry_type': 'circular',
         'n_rho': 25,
         'geometry_configs': {
+          # Create a triangular ramp of B0.
+          # For the first second, B0 will be START_B0,
+          # then will ramp to and from MID_B0 over the course of 2 seconds
           0.0: {
-            'B0': 1.0,
+            'B0': START_B0,
           },
           1.0: {
-            'B0': 2.0,
+            'B0': START_B0,
           },
           2.0: {
-            'B0': 1.0,
-          }
+            'B0': MID_B0,
+          },
+          3.0: {
+            'B0': START_B0,
+          },
         }
     },
     # No sources
