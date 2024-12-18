@@ -193,8 +193,8 @@ class QuasilinearTransportModelTest(parameterized.TestCase):
     """Tests that calculate_normalized_logarithmic_gradient is calculated correctly."""
     dummy_cell_variable = cell_variable.CellVariable(
         value=jnp.array([2.0, 1.0]),
+        left_face_grad_constraint=jnp.array(0.0),
         right_face_constraint=jnp.array(0.5),
-        right_face_grad_constraint=None,
         dr=jnp.array(1.0),
     )
     radial_coordinate = jnp.array([0.0, 1.0])
@@ -267,8 +267,8 @@ def _get_dummy_core_profiles(value, right_face_constraint):
   currents = state.Currents.zeros(geo)
   dummy_cell_variable = cell_variable.CellVariable(
       value=value,
+      left_face_grad_constraint=jnp.array(0.0),
       right_face_constraint=right_face_constraint,
-      right_face_grad_constraint=None,
       dr=jnp.array(1.0),
   )
   return state.CoreProfiles(
