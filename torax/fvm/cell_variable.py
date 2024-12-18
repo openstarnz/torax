@@ -65,12 +65,8 @@ class CellVariable:
   dr: jax.Array
   left_face_constraint: Optional[jax.Array] = None
   right_face_constraint: Optional[jax.Array] = None
-  left_face_grad_constraint: Optional[jax.Array] = dataclasses.field(
-      default_factory=_zero
-  )
-  right_face_grad_constraint: Optional[jax.Array] = dataclasses.field(
-      default_factory=_zero
-  )
+  left_face_grad_constraint: Optional[jax.Array] = None
+  right_face_grad_constraint: Optional[jax.Array] = None
   history: Optional[bool] = None
 
   # Can't make the above default values be jax zeros because that would be a

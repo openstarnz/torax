@@ -126,6 +126,7 @@ def circular_references() -> References:
               6.41824136951859e01,
           ]).astype('float64')
       ),
+      left_face_grad_constraint=jnp.array(0.0),
       right_face_grad_constraint=jnp.array(47.64848792277505),
       dr=geo.drho_norm,
   )
@@ -281,6 +282,7 @@ def chease_references_Ip_from_chease() -> References:  # pylint: disable=invalid
               5.67944467049695e01,
           ]).astype('float64')
       ),
+      left_face_grad_constraint=jnp.array(0.0),
       right_face_grad_constraint=jnp.array(50.417485084359726),
       dr=geo.drho_norm,
   )
@@ -436,6 +438,7 @@ def chease_references_Ip_from_runtime_params() -> References:  # pylint: disable
               7.23819741685979e01,
           ]).astype('float64')
       ),
+      left_face_grad_constraint=jnp.array(0.0),
       right_face_grad_constraint=jnp.array(64.25482269382654),
       dr=geo.drho_norm,
   )
