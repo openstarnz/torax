@@ -180,6 +180,15 @@ class Geometry:
   Phibdot: chex.Array
   _z_magnetic_axis: chex.Array
 
+  def __post_init__(self):
+    self.sanity_check()
+
+  def sanity_check(self):
+    if not jax_utils.is_tracer(self.Phi) and not np.allclose(self.Phi, jnp.pi * self.B0 * self.rho**2):
+      raise ValueError('Phi does not match expected value.')
+    if not jax_utils.is_tracer(self.Phi_face) and not np.allclose(self.Phi_face, jnp.pi * self.B0 * self.rho_face**2):
+      raise ValueError('Phi_face does not match expected value.')
+
   @property
   def rho_norm(self) -> chex.Array:
     return self.torax_mesh.cell_centers
