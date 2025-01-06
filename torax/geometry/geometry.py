@@ -184,9 +184,17 @@ class Geometry:
     self.sanity_check()
 
   def sanity_check(self):
-    if not jax_utils.is_tracer(self.Phi) and not np.allclose(self.Phi, jnp.pi * self.B0 * self.rho**2):
+    # jax_utils.error_if doesn't work here because no further computation is done,
+    # and the class is frozen.
+    if (
+        not jax_utils.is_tracer(self.Phi)
+        and not jnp.allclose(self.Phi, jnp.pi * self.B0 * self.rho**2)
+    ):
       raise ValueError('Phi does not match expected value.')
-    if not jax_utils.is_tracer(self.Phi_face) and not np.allclose(self.Phi_face, jnp.pi * self.B0 * self.rho_face**2):
+    if (
+        not jax_utils.is_tracer(self.Phi_face)
+        and not jnp.allclose(self.Phi_face, jnp.pi * self.B0 * self.rho_face**2)
+    ):
       raise ValueError('Phi_face does not match expected value.')
 
   @property
