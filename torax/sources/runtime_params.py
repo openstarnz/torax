@@ -22,10 +22,9 @@ from typing import Any
 
 import chex
 from torax import array_typing
-from torax import geometry
 from torax import interpolated_param
 from torax.config import base
-from torax.sources import formula_config
+from torax.geometry import geometry
 
 
 TimeInterpolatedInput = interpolated_param.TimeInterpolatedInput
@@ -42,15 +41,10 @@ class Mode(enum.Enum):
   # explicit depending on the model implementation.
   MODEL_BASED = 1
 
-  # Source values come from a prescribed (possibly time-dependent) formula that
-  # is not dependent on the state of the system. These formulas may be dependent
-  # on the config and geometry of the system.
-  FORMULA_BASED = 2
-
   # Source values come from a pre-determined set of values, that may evolve in
   # time. Values can be drawn from a file or an array. These sources are always
   # explicit.
-  PRESCRIBED = 3
+  PRESCRIBED = 2
 
 
 @dataclasses.dataclass
@@ -81,12 +75,6 @@ class RuntimeParams(base.RuntimeParametersConfig):
   # running the simulation.
   is_explicit: bool = False
 
-  # Parameters used only when the source is using a prescribed formula to
-  # compute its profile.
-  formula: base.RuntimeParametersConfig = dataclasses.field(
-      default_factory=formula_config.Exponential
-  )
-
   # Prescribed values for the source. Used only when the source is fully
   # prescribed (i.e. source.mode == Mode.PRESCRIBED).
   # The default here is a vector of all zeros along for all rho and time, and
@@ -111,35 +99,6 @@ class RuntimeParams(base.RuntimeParametersConfig):
     )
 
 
-@chex.dataclass
-class RuntimeParamsProvider(
-    base.RuntimeParametersProvider['DynamicRuntimeParams']
-):
-  """Runtime parameter provider for a single source/sink term."""
-
-  runtime_params_config: RuntimeParams
-  formula: base.RuntimeParametersProvider
-  prescribed_values: interpolated_param.InterpolatedVarTimeRho
-
-  def get_dynamic_params_kwargs(
-      self,
-      t: chex.Numeric,
-  ) -> dict[str, Any]:
-    dynamic_params_kwargs = super(
-        RuntimeParamsProvider, self
-    ).get_dynamic_params_kwargs(t)
-    # Remove any fields from runtime params that are included in static params.
-    for field in dataclasses.fields(StaticRuntimeParams):
-      del dynamic_params_kwargs[field.name]
-    return dynamic_params_kwargs
-
-  def build_dynamic_params(
-      self,
-      t: chex.Numeric,
-  ) -> DynamicRuntimeParams:
-    return DynamicRuntimeParams(**self.get_dynamic_params_kwargs(t))
-
-
 @chex.dataclass(frozen=True)
 class DynamicRuntimeParams:
   """Dynamic params for a single TORAX source.
@@ -148,7 +107,6 @@ class DynamicRuntimeParams:
   stateless, so these params are their inputs to determine their output
   profiles.
   """
-  formula: formula_config.DynamicFormula
   prescribed_values: array_typing.ArrayFloat
 
 
@@ -158,3 +116,34 @@ class StaticRuntimeParams:
 
   mode: int
   is_explicit: bool
+
+
+@chex.dataclass
+class RuntimeParamsProvider(
+    base.RuntimeParametersProvider['DynamicRuntimeParams']
+):
+  """Runtime parameter provider for a single source/sink term."""
+
+  runtime_params_config: RuntimeParams
+  prescribed_values: interpolated_param.InterpolatedVarTimeRho
+
+  def get_dynamic_params_kwargs(
+      self,
+      t: chex.Numeric,
+      static_runtime_params_type: type[
+          StaticRuntimeParams
+      ] = StaticRuntimeParams,
+  ) -> dict[str, Any]:
+    dynamic_params_kwargs = super(
+        RuntimeParamsProvider, self
+    ).get_dynamic_params_kwargs(t)
+    # Remove any fields from runtime params that are included in static params.
+    for field in dataclasses.fields(static_runtime_params_type):
+      del dynamic_params_kwargs[field.name]
+    return dynamic_params_kwargs
+
+  def build_dynamic_params(
+      self,
+      t: chex.Numeric,
+  ) -> DynamicRuntimeParams:
+    return DynamicRuntimeParams(**self.get_dynamic_params_kwargs(t))

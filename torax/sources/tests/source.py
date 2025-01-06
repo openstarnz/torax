@@ -21,9 +21,9 @@ import jax
 from jax import numpy as jnp
 import numpy as np
 from torax import core_profile_setters
-from torax import geometry
 from torax.config import runtime_params as general_runtime_params
 from torax.config import runtime_params_slice
+from torax.geometry import geometry
 from torax.sources import runtime_params as runtime_params_lib
 from torax.sources import source as source_lib
 from torax.sources import source_models as source_models_lib
@@ -31,10 +31,11 @@ from torax.sources.tests import test_lib
 
 
 def get_zero_profile(
-    profile_type: source_lib.ProfileType, geo: geometry.Geometry,
+    profile_type: source_lib.ProfileType,
+    geo: geometry.Geometry,
 ) -> jax.Array:
   """Returns a source profile with all zeros."""
-  return  jnp.zeros(profile_type.get_profile_shape(geo))
+  return jnp.zeros(profile_type.get_profile_shape(geo))
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -44,26 +45,27 @@ class PsiTestSource(source_lib.Source):
   def affected_core_profiles(self):
     return (source_lib.AffectedCoreProfile.PSI,)
 
+  @property
+  def source_name(self) -> str:
+    return 'foo'
+
 
 PsiTestSourceBuilder = source_lib.make_source_builder(PsiTestSource)
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
 class IonElTestSource(source_lib.Source):
+  """Test source that affects ion and electron profiles."""
+
+  @property
+  def source_name(self) -> str:
+    return 'foo'
 
   @property
   def affected_core_profiles(self):
     return (
         source_lib.AffectedCoreProfile.TEMP_ION,
         source_lib.AffectedCoreProfile.TEMP_EL,
-    )
-
-  @property
-  def supported_modes(self) -> tuple[runtime_params_lib.Mode, ...]:
-    return (
-        runtime_params_lib.Mode.FORMULA_BASED,
-        runtime_params_lib.Mode.MODEL_BASED,
-        runtime_params_lib.Mode.PRESCRIBED,
     )
 
 
@@ -146,6 +148,7 @@ class SourceTest(parameterized.TestCase):
     @dataclasses.dataclass(frozen=True, eq=True)
     class MySource:
       my_field: int
+      model_func: source_lib.SourceProfileFunction | None = None
 
     # pylint doesn't realize this is a class
     MySourceBuilder = source_lib.make_source_builder(  # pylint: disable=invalid-name
@@ -182,8 +185,9 @@ class SourceTest(parameterized.TestCase):
         )
     )
     static_slice = runtime_params_slice.build_static_runtime_params_slice(
-        runtime_params,
+        runtime_params=runtime_params,
         source_runtime_params=source_models_builder.runtime_params,
+        torax_mesh=geo.torax_mesh,
     )
     core_profiles = core_profile_setters.initial_core_profiles(
         dynamic_runtime_params_slice=dynamic_runtime_params_slice,
@@ -193,11 +197,7 @@ class SourceTest(parameterized.TestCase):
     )
     profile = source.get_value(
         dynamic_runtime_params_slice=dynamic_runtime_params_slice,
-        dynamic_source_runtime_params=dynamic_runtime_params_slice.sources[
-            'foo'
-        ],
         static_runtime_params_slice=static_slice,
-        static_source_runtime_params=static_slice.sources['foo'],
         geo=geo,
         core_profiles=core_profiles,
     )
@@ -206,89 +206,24 @@ class SourceTest(parameterized.TestCase):
         get_zero_profile(source_lib.ProfileType.CELL, geo),
     )
 
-  def test_unsupported_modes_raise_errors(self):
-    """Calling with an unsupported type should raise an error."""
-
-    class TestSource(source_lib.Source):
-      """A test source."""
-
-      @property
-      def affected_core_profiles(
-          self,
-      ) -> tuple[source_lib.AffectedCoreProfile, ...]:
-        return (source_lib.AffectedCoreProfile.NE,)
-
-      @property
-      def supported_modes(self) -> tuple[runtime_params_lib.Mode, ...]:
-        return (
-            runtime_params_lib.Mode.FORMULA_BASED,
-        )
-    source_builder = source_lib.make_source_builder(TestSource)()
-    # But set the runtime params of the source to use ZERO as the mode.
-    source_builder.runtime_params.mode = runtime_params_lib.Mode.ZERO
-    source_models_builder = source_models_lib.SourceModelsBuilder(
-        {'foo': source_builder},
-    )
-    source_models = source_models_builder()
-    source = source_models.sources['foo']
-    runtime_params = general_runtime_params.GeneralRuntimeParams()
-    geo = geometry.build_circular_geometry()
-    dynamic_runtime_params_slice = (
-        runtime_params_slice.DynamicRuntimeParamsSliceProvider(
-            runtime_params,
-            sources=source_models_builder.runtime_params,
-            torax_mesh=geo.torax_mesh,
-        )(
-            t=runtime_params.numerics.t_initial,
-        )
-    )
-    static_slice = runtime_params_slice.build_static_runtime_params_slice(
-        runtime_params,
-        source_runtime_params=source_models_builder.runtime_params,
-    )
-    core_profiles = core_profile_setters.initial_core_profiles(
-        dynamic_runtime_params_slice=dynamic_runtime_params_slice,
-        static_runtime_params_slice=static_slice,
-        geo=geo,
-        source_models=source_models,
-    )
-    # But calling requesting ZERO shouldn't work.
-    with self.assertRaises(ValueError):
-      source.get_value(
-          dynamic_runtime_params_slice=dynamic_runtime_params_slice,
-          dynamic_source_runtime_params=dynamic_runtime_params_slice.sources[
-              'foo'
-          ],
-          static_runtime_params_slice=static_slice,
-          static_source_runtime_params=static_slice.sources['foo'],
-          geo=geo,
-          core_profiles=core_profiles,
-      )
-
   @parameterized.parameters(
       (runtime_params_lib.Mode.ZERO, np.array([0, 0, 0, 0])),
-      (runtime_params_lib.Mode.MODEL_BASED, np.array([1, 1, 1, 1])),
-      (runtime_params_lib.Mode.FORMULA_BASED, np.array([2, 2, 2, 2])),
+      (runtime_params_lib.Mode.MODEL_BASED, np.array([2, 2, 2, 2])),
       (runtime_params_lib.Mode.PRESCRIBED, np.array([3, 3, 3, 3])),
   )
   def test_correct_mode_called(self, mode, expected_profile):
     """The correct mode should be called."""
-    source_builder = test_lib.TestSourceBuilder()
+    source_builder = source_lib.make_source_builder(
+        test_lib.TestSource,
+        model_func=lambda _0, _1, _2, _3, _4, _5: jnp.ones(
+            source_lib.ProfileType.CELL.get_profile_shape(geo)
+        ) * 2,
+    )()
     source_models_builder = source_models_lib.SourceModelsBuilder(
         {'foo': source_builder},
     )
     source_models = source_models_builder()
     source = source_models.sources['foo']
-    source = dataclasses.replace(
-        source,
-        model_func=lambda _0, _1, _2, _3, _4, _5, _6: jnp.ones(
-            source_lib.ProfileType.CELL.get_profile_shape(geo)
-        ),
-        formula=lambda _0, _1, _2, _3, _4, _5, _6: jnp.ones(
-            source_lib.ProfileType.CELL.get_profile_shape(geo)
-        )
-        * 2,
-    )
     source_runtime_params = source_models_builder.runtime_params
     runtime_params = general_runtime_params.GeneralRuntimeParams()
     geo = geometry.build_circular_geometry(n_rho=4)
@@ -307,8 +242,9 @@ class SourceTest(parameterized.TestCase):
         )
     )
     static_slice = runtime_params_slice.build_static_runtime_params_slice(
-        runtime_params,
+        runtime_params=runtime_params,
         source_runtime_params=source_runtime_params,
+        torax_mesh=geo.torax_mesh,
     )
     core_profiles = core_profile_setters.initial_core_profiles(
         dynamic_runtime_params_slice=dynamic_runtime_params_slice,
@@ -318,11 +254,7 @@ class SourceTest(parameterized.TestCase):
     )
     profile = source.get_value(
         dynamic_runtime_params_slice=dynamic_runtime_params_slice,
-        dynamic_source_runtime_params=dynamic_runtime_params_slice.sources[
-            'foo'
-        ],
         static_runtime_params_slice=static_slice,
-        static_source_runtime_params=static_slice.sources['foo'],
         geo=geo,
         core_profiles=core_profiles,
     )
@@ -351,8 +283,9 @@ class SourceTest(parameterized.TestCase):
         )
     )
     static_slice = runtime_params_slice.build_static_runtime_params_slice(
-        runtime_params,
+        runtime_params=runtime_params,
         source_runtime_params=source_models_builder.runtime_params,
+        torax_mesh=geo.torax_mesh,
     )
     core_profiles = core_profile_setters.initial_core_profiles(
         dynamic_runtime_params_slice=dynamic_runtime_params_slice,
@@ -362,69 +295,36 @@ class SourceTest(parameterized.TestCase):
     )
     with self.subTest('model_based'):
       static_slice = runtime_params_slice.build_static_runtime_params_slice(
-          runtime_params,
+          runtime_params=runtime_params,
           source_runtime_params={
               'foo': dataclasses.replace(
                   source_builder.runtime_params,
                   mode=runtime_params_lib.Mode.MODEL_BASED,
               )
           },
+          torax_mesh=geo.torax_mesh,
       )
-      profile = source.get_value(
-          dynamic_runtime_params_slice=dynamic_runtime_params_slice,
-          dynamic_source_runtime_params=dynamic_runtime_params_slice.sources[
-              'foo'
-          ],
-          static_runtime_params_slice=static_slice,
-          static_source_runtime_params=static_slice.sources['foo'],
-          geo=geo,
-          core_profiles=core_profiles,
-      )
-      np.testing.assert_allclose(
-          profile,
-          get_zero_profile(source_lib.ProfileType.CELL, geo),
-      )
-    with self.subTest('formula'):
-      static_slice = runtime_params_slice.build_static_runtime_params_slice(
-          runtime_params,
-          source_runtime_params={
-              'foo': dataclasses.replace(
-                  source_builder.runtime_params,
-                  mode=runtime_params_lib.Mode.FORMULA_BASED,
-              )
-          },
-      )
-      profile = source.get_value(
-          dynamic_runtime_params_slice=dynamic_runtime_params_slice,
-          dynamic_source_runtime_params=dynamic_runtime_params_slice.sources[
-              'foo'
-          ],
-          static_runtime_params_slice=static_slice,
-          static_source_runtime_params=static_slice.sources['foo'],
-          geo=geo,
-          core_profiles=core_profiles,
-      )
-      np.testing.assert_allclose(
-          profile,
-          get_zero_profile(source_lib.ProfileType.CELL, geo),
-      )
+      with self.assertRaises(ValueError):
+        source.get_value(
+            dynamic_runtime_params_slice=dynamic_runtime_params_slice,
+            static_runtime_params_slice=static_slice,
+            geo=geo,
+            core_profiles=core_profiles,
+        )
     with self.subTest('prescribed'):
       static_slice = runtime_params_slice.build_static_runtime_params_slice(
-          runtime_params,
+          runtime_params=runtime_params,
           source_runtime_params={
               'foo': dataclasses.replace(
                   source_builder.runtime_params,
                   mode=runtime_params_lib.Mode.PRESCRIBED,
               )
           },
+          torax_mesh=geo.torax_mesh,
       )
       profile = source.get_value(
           dynamic_runtime_params_slice=dynamic_runtime_params_slice,
-          dynamic_source_runtime_params=dynamic_runtime_params_slice.sources[
-              'foo'
-          ],
           static_runtime_params_slice=static_slice,
-          static_source_runtime_params=static_slice.sources['foo'],
           geo=geo,
           core_profiles=core_profiles,
       )
@@ -433,60 +333,15 @@ class SourceTest(parameterized.TestCase):
           get_zero_profile(source_lib.ProfileType.CELL, geo),
       )
 
-  def test_overriding_default_formula(self):
-    """The user-specified formula should override the default formula."""
-    geo = geometry.build_circular_geometry()
-    output_shape = source_lib.ProfileType.CELL.get_profile_shape(geo)
-    expected_output = jnp.ones(output_shape)
-    source_builder = IonElTestSourceBuilder(
-        formula=lambda _0, _1, _2, _3, _4, _5, _6: expected_output,
-    )
-    source_builder.runtime_params.mode = runtime_params_lib.Mode.FORMULA_BASED
-    source_models_builder = source_models_lib.SourceModelsBuilder(
-        {'foo': source_builder},
-    )
-    source_models = source_models_builder()
-    source = source_models.sources['foo']
-    runtime_params = general_runtime_params.GeneralRuntimeParams()
-    dynamic_runtime_params_slice = (
-        runtime_params_slice.DynamicRuntimeParamsSliceProvider(
-            runtime_params,
-            sources=source_models_builder.runtime_params,
-            torax_mesh=geo.torax_mesh,
-        )(
-            t=runtime_params.numerics.t_initial,
-        )
-    )
-    static_slice = runtime_params_slice.build_static_runtime_params_slice(
-        runtime_params,
-        source_runtime_params=source_models_builder.runtime_params,
-    )
-    core_profiles = core_profile_setters.initial_core_profiles(
-        dynamic_runtime_params_slice=dynamic_runtime_params_slice,
-        static_runtime_params_slice=static_slice,
-        geo=geo,
-        source_models=source_models,
-    )
-    profile = source.get_value(
-        dynamic_runtime_params_slice=dynamic_runtime_params_slice,
-        dynamic_source_runtime_params=dynamic_runtime_params_slice.sources[
-            'foo'
-        ],
-        static_runtime_params_slice=static_slice,
-        static_source_runtime_params=static_slice.sources['foo'],
-        geo=geo,
-        core_profiles=core_profiles,
-    )
-    np.testing.assert_allclose(profile, expected_output)
-
   def test_overriding_model(self):
     """The user-specified model should override the default model."""
     geo = geometry.build_circular_geometry()
     output_shape = source_lib.ProfileType.CELL.get_profile_shape(geo)
     expected_output = jnp.ones(output_shape)
-    source_builder = IonElTestSourceBuilder(
-        model_func=lambda _0, _1, _2, _3, _4, _5, _6: expected_output,
-    )
+    source_builder = source_lib.make_source_builder(
+        IonElTestSource,
+        model_func=lambda _0, _1, _2, _3, _4, _5: expected_output,
+    )()
     source_builder.runtime_params.mode = runtime_params_lib.Mode.MODEL_BASED
     source_models_builder = source_models_lib.SourceModelsBuilder(
         {'foo': source_builder},
@@ -504,8 +359,9 @@ class SourceTest(parameterized.TestCase):
         )
     )
     static_slice = runtime_params_slice.build_static_runtime_params_slice(
-        runtime_params,
+        runtime_params=runtime_params,
         source_runtime_params=source_models_builder.runtime_params,
+        torax_mesh=geo.torax_mesh,
     )
     core_profiles = core_profile_setters.initial_core_profiles(
         dynamic_runtime_params_slice=dynamic_runtime_params_slice,
@@ -515,11 +371,7 @@ class SourceTest(parameterized.TestCase):
     )
     profile = source.get_value(
         dynamic_runtime_params_slice=dynamic_runtime_params_slice,
-        dynamic_source_runtime_params=dynamic_runtime_params_slice.sources[
-            'foo'
-        ],
         static_runtime_params_slice=static_slice,
-        static_source_runtime_params=static_slice.sources['foo'],
         geo=geo,
         core_profiles=core_profiles,
     )
@@ -554,8 +406,9 @@ class SourceTest(parameterized.TestCase):
         )
     )
     static_slice = runtime_params_slice.build_static_runtime_params_slice(
-        runtime_params,
+        runtime_params=runtime_params,
         source_runtime_params=source_models_builder.runtime_params,
+        torax_mesh=geo.torax_mesh,
     )
     core_profiles = core_profile_setters.initial_core_profiles(
         dynamic_runtime_params_slice=dynamic_runtime_params_slice,
@@ -565,11 +418,7 @@ class SourceTest(parameterized.TestCase):
     )
     profile = source.get_value(
         dynamic_runtime_params_slice=dynamic_runtime_params_slice,
-        dynamic_source_runtime_params=dynamic_runtime_params_slice.sources[
-            'foo'
-        ],
         static_runtime_params_slice=static_slice,
-        static_source_runtime_params=static_slice.sources['foo'],
         geo=geo,
         core_profiles=core_profiles,
     )
@@ -584,6 +433,10 @@ class SourceTest(parameterized.TestCase):
       output_shape_getter = lambda _0: output_shape
 
       @property
+      def source_name(self) -> str:
+        return 'foo'
+
+      @property
       def affected_core_profiles(self):
         return (
             source_lib.AffectedCoreProfile.PSI,
@@ -592,7 +445,7 @@ class SourceTest(parameterized.TestCase):
 
     profile = jnp.asarray([[1, 2, 3, 4], [5, 6, 7, 8]])  # from get_value()
     source = TestSource(
-        model_func=lambda _0, _1, _2, _3, _4, _5, _6: profile,
+        model_func=lambda _0, _1, _2, _3, _4, _5: profile,
     )
     geo = geometry.build_circular_geometry(n_rho=4)
     psi_profile = source.get_source_profile_for_affected_core_profile(
@@ -616,57 +469,12 @@ class SourceTest(parameterized.TestCase):
 class SingleProfileSourceTest(parameterized.TestCase):
   """Tests for SingleProfileSource."""
 
-  def test_custom_formula(self):
-    """The user-specified formula should override the default formula."""
-    runtime_params = general_runtime_params.GeneralRuntimeParams()
-    geo = geometry.build_circular_geometry(n_rho=5)
-    expected_output = jnp.ones((5))  # 5 matches the geo.
-    source_builder = PsiTestSourceBuilder(
-        formula=lambda _0, _1, _2, _3, _4, _5, _6: expected_output,
-    )
-    source_builder.runtime_params.mode = runtime_params_lib.Mode.FORMULA_BASED
-    source_models_builder = source_models_lib.SourceModelsBuilder(
-        {'foo': source_builder},
-    )
-    source_models = source_models_builder()
-    source = source_models.sources['foo']
-    dynamic_runtime_params_slice = (
-        runtime_params_slice.DynamicRuntimeParamsSliceProvider(
-            runtime_params,
-            sources=source_models_builder.runtime_params,
-            torax_mesh=geo.torax_mesh,
-        )(
-            t=runtime_params.numerics.t_initial,
-        )
-    )
-    static_slice = runtime_params_slice.build_static_runtime_params_slice(
-        runtime_params,
-        source_runtime_params=source_models_builder.runtime_params,
-    )
-    core_profiles = core_profile_setters.initial_core_profiles(
-        dynamic_runtime_params_slice=dynamic_runtime_params_slice,
-        static_runtime_params_slice=static_slice,
-        geo=geo,
-        source_models=source_models,
-    )
-    profile = source.get_value(
-        dynamic_runtime_params_slice=dynamic_runtime_params_slice,
-        dynamic_source_runtime_params=dynamic_runtime_params_slice.sources[
-            'foo'
-        ],
-        static_runtime_params_slice=static_slice,
-        static_source_runtime_params=static_slice.sources['foo'],
-        geo=geo,
-        core_profiles=core_profiles,
-    )
-    np.testing.assert_allclose(profile, expected_output)
-
   def test_retrieving_profile_for_affected_state(self):
     """Grabbing the correct profile works for all mesh state attributes."""
     profile = jnp.asarray([1, 2, 3, 4])  # from get_value()
 
     source = test_lib.TestSource(
-        model_func=lambda _0, _1, _2, _3, _4, _5, _6: profile,
+        model_func=lambda _0, _1, _2, _3, _4, _5: profile,
     )
     geo = geometry.build_circular_geometry(n_rho=4)
     psi_profile = source.get_source_profile_for_affected_core_profile(

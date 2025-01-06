@@ -20,13 +20,14 @@ import dataclasses
 import enum
 from typing import Any, Optional
 
+from absl import logging
 import chex
 import jax
 from jax import numpy as jnp
 from torax import array_typing
-from torax import geometry
 from torax.config import config_args
 from torax.fvm import cell_variable
+from torax.geometry import geometry
 from torax.sources import source_profiles
 
 
@@ -328,6 +329,11 @@ class PostProcessedOutputs:
     E_cumulative_fusion: Total cumulative fusion energy [J]
     E_cumulative_external: Total external injected energy (Ohmic + auxiliary
       heating) [J]
+    te_volume_avg: Volume average electron temperature [keV]
+    ti_volume_avg: Volume average ion temperature [keV]
+    ne_volume_avg: Volume average electron density [nref m^-3]
+    ni_volume_avg: Volume average main ion density [nref m^-3]
+    q95: q at 95% of the normalized poloidal flux
   """
 
   pressure_thermal_ion_face: array_typing.ArrayFloat
@@ -377,6 +383,11 @@ class PostProcessedOutputs:
   ne_min_P_LH: array_typing.ScalarFloat
   E_cumulative_fusion: array_typing.ScalarFloat
   E_cumulative_external: array_typing.ScalarFloat
+  te_volume_avg: array_typing.ScalarFloat
+  ti_volume_avg: array_typing.ScalarFloat
+  ne_volume_avg: array_typing.ScalarFloat
+  ni_volume_avg: array_typing.ScalarFloat
+  q95: array_typing.ScalarFloat
   # pylint: enable=invalid-name
 
   @classmethod
@@ -426,6 +437,11 @@ class PostProcessedOutputs:
         ne_min_P_LH=jnp.array(0.0),
         E_cumulative_fusion=jnp.array(0.0),
         E_cumulative_external=jnp.array(0.0),
+        te_volume_avg=jnp.array(0.0),
+        ti_volume_avg=jnp.array(0.0),
+        ne_volume_avg=jnp.array(0.0),
+        ni_volume_avg=jnp.array(0.0),
+        q95=jnp.array(0.0),
     )
 
 
@@ -456,6 +472,25 @@ class SimError(enum.Enum):
   NO_ERROR = 0
   NAN_DETECTED = 1
   QUASINEUTRALITY_BROKEN = 2
+
+  def log_error(self):
+    match self:
+      case SimError.NAN_DETECTED:
+        logging.error("""
+            Simulation stopped due to NaNs in core profiles.
+            Possible cause is negative temperatures or densities.
+            Output file contains all profiles up to the last valid step.
+            """)
+      case SimError.QUASINEUTRALITY_BROKEN:
+        logging.error("""
+            Simulation stopped due to quasineutrality being violated.
+            Possible cause is bad handling of impurity species.
+            Output file contains all profiles up to the last valid step.
+            """)
+      case SimError.NO_ERROR:
+        pass
+      case _:
+        raise ValueError(f"Unknown SimError: {self}")
 
 
 @chex.dataclass

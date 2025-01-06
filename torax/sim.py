@@ -36,8 +36,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from torax import core_profile_setters
-from torax import geometry
-from torax import geometry_provider as geometry_provider_lib
 from torax import jax_utils
 from torax import output
 from torax import physics
@@ -46,11 +44,12 @@ from torax import state
 from torax.config import config_args
 from torax.config import runtime_params as general_runtime_params
 from torax.config import runtime_params_slice
+from torax.geometry import geometry
+from torax.geometry import geometry_provider as geometry_provider_lib
 from torax.pedestal_model import pedestal_model as pedestal_model_lib
 from torax.sources import ohmic_heat_source
 from torax.sources import source_models as source_models_lib
 from torax.sources import source_profiles as source_profiles_lib
-from torax.spectators import spectator as spectator_lib
 from torax.stepper import stepper as stepper_lib
 from torax.time_step_calculator import chi_time_step_calculator
 from torax.time_step_calculator import time_step_calculator as ts
@@ -69,22 +68,6 @@ def _log_timestep(
       dt,
       outer_stepper_iterations,
   )
-
-
-def _log_sim_error(sim_error: state.SimError) -> None:
-  """Logs simulation error."""
-  if sim_error == state.SimError.NAN_DETECTED:
-    logging.error("""
-        Simulation stopped due to NaNs in core profiles.
-        Possible cause is negative temperatures or densities.
-        Output file contains all profiles up to the last valid step.
-        """)
-  elif sim_error == state.SimError.QUASINEUTRALITY_BROKEN:
-    logging.error("""
-        Simulation stopped due to quasineutrality being violated.
-        Possible cause is bad handling of impurity species.
-        Output file contains all profiles up to the last valid step.
-        """)
 
 
 def get_consistent_dynamic_runtime_params_slice_and_geometry(
@@ -671,8 +654,6 @@ def get_initial_state(
   )
 
 
-# This class is read-only but not a frozen dataclass to allow us to set the
-# SimulationStepFn attribute lazily when run() is called.
 class Sim:
   """A lightweight object holding all components of a simulation.
 
@@ -756,15 +737,68 @@ class Sim:
 
   @property
   def source_models(self) -> source_models_lib.SourceModels:
-    if self._step_fn is None:
-      assert self._stepper is not None
-      return self._stepper.source_models
     return self._step_fn.stepper.source_models
+
+  def update_base_components(
+      self,
+      *,
+      dynamic_runtime_params_slice_provider: (
+          runtime_params_slice.DynamicRuntimeParamsSliceProvider | None
+      ) = None,
+      geometry_provider: geometry_provider_lib.GeometryProvider | None = None,
+  ):
+    """Updates the Sim object with components that have already been updated.
+
+    Currently this only supports updating the geometry provider and the dynamic
+    runtime params slice provider, both of which can be updated without
+    recompilation.
+
+    Args:
+      dynamic_runtime_params_slice_provider: The new dynamic runtime params
+        slice provider. This should already have been updated with modifications
+        to the various components. If None, the existing one is kept.
+      geometry_provider: The new geometry provider. If None, the existing one is
+        kept.
+
+    Raises:
+      ValueError: If the Sim object has a file restart or if the geometry
+        provider has a different mesh than the existing one.
+    """
+    if self._file_restart is not None:
+      # TODO(b/384767453): Add support for updating a Sim object with a file
+      # restart.
+      raise ValueError('Cannot update a Sim object with a file restart.')
+    if dynamic_runtime_params_slice_provider is not None:
+      self._dynamic_runtime_params_slice_provider = (
+          dynamic_runtime_params_slice_provider
+      )
+    if geometry_provider is not None:
+      if geometry_provider.torax_mesh != self._geometry_provider.torax_mesh:
+        raise ValueError(
+            'Cannot update a Sim object with a geometry provider with a '
+            'different mesh.'
+        )
+      self._geometry_provider = geometry_provider
+
+    dynamic_runtime_params_slice_for_init, geo_for_init = (
+        get_consistent_dynamic_runtime_params_slice_and_geometry(
+            self._initial_state.t,
+            self._dynamic_runtime_params_slice_provider,
+            self._geometry_provider,
+        )
+    )
+    self._initial_state = get_initial_state(
+        static_runtime_params_slice=self._static_runtime_params_slice,
+        dynamic_runtime_params_slice=dynamic_runtime_params_slice_for_init,
+        geo=geo_for_init,
+        source_models=self._stepper.source_models,
+        time_step_calculator=self._time_step_calculator,
+        step_fn=self._step_fn,
+    )
 
   def run(
       self,
       log_timestep_info: bool = False,
-      spectator: spectator_lib.Spectator | None = None,
   ) -> output.ToraxSimOutputs:
     """Runs the transport simulation over a prescribed time interval.
 
@@ -772,28 +806,11 @@ class Sim:
 
     Args:
       log_timestep_info: See `run_simulation()`.
-      spectator: If a SimulationStepFn has not yet been built for this Sim
-        object (if it was not passed in __init__ or this object has never been
-        run), then it will be built in this call, and this spectator will be
-        built into it. If the SimulationStepFn has already been built, then this
-        argument is ignored and the spectator built into the SimulationStepFn
-        cannot change. In these cases where you want to use a new spectator, you
-        must build a new Sim object.
 
     Returns:
       Tuple of all ToraxSimStates, one per time step and an additional one at
       the beginning for the starting state.
     """
-    if self._step_fn is None:
-      self._step_fn = SimulationStepFn(
-          stepper=self._stepper,
-          time_step_calculator=self.time_step_calculator,
-          transport_model=self._transport_model,
-          pedestal_model=self._pedestal_model,
-      )
-    assert self.step_fn
-    if spectator is not None:
-      spectator.reset()
     return run_simulation(
         static_runtime_params_slice=self.static_runtime_params_slice,
         dynamic_runtime_params_slice_provider=self.dynamic_runtime_params_slice_provider,
@@ -802,7 +819,6 @@ class Sim:
         time_step_calculator=self.time_step_calculator,
         step_fn=self.step_fn,
         log_timestep_info=log_timestep_info,
-        spectator=spectator,
     )
 
 
@@ -916,11 +932,13 @@ def build_sim_object(
   transport_model = transport_model_builder()
   pedestal_model = pedestal_model_builder()
 
+  # TODO(b/385788907): Clearly document all changes that lead to recompilations.
   static_runtime_params_slice = (
       runtime_params_slice.build_static_runtime_params_slice(
           runtime_params=runtime_params,
-          stepper=stepper_builder.runtime_params,
           source_runtime_params=source_models_builder.runtime_params,
+          torax_mesh=geometry_provider.torax_mesh,
+          stepper=stepper_builder.runtime_params,
       )
   )
   dynamic_runtime_params_slice_provider = (
@@ -1034,7 +1052,6 @@ def run_simulation(
     time_step_calculator: ts.TimeStepCalculator,
     step_fn: SimulationStepFn,
     log_timestep_info: bool = False,
-    spectator: spectator_lib.Spectator | None = None,
 ) -> output.ToraxSimOutputs:
   """Runs the transport simulation over a prescribed time interval.
 
@@ -1075,8 +1092,6 @@ def run_simulation(
       ToraxSimState objects.
     log_timestep_info: If True, logs basic timestep info, like time, dt, on
       every step.
-    spectator: Object which can "spectate" values as the simulation runs. See
-      the Spectator class docstring for more details.
 
   Returns:
     ToraxSimOutputs, containing information on the sim error state, and the
@@ -1109,10 +1124,6 @@ def run_simulation(
           geometry_provider,
       )
   )
-  if spectator is not None:
-    # Because of the updates we apply to the core sources during the next
-    # iteration, we need to start the spectator before step here.
-    spectator.before_step()
 
   sim_state = initial_state
 
@@ -1149,14 +1160,6 @@ def run_simulation(
           logging.info(
               'Solver converged only within coarse tolerance in previous step.'
           )
-    # Make sure to "spectate" the state after the source profiles  have been
-    # merged and updated in the output sim_state.
-    if spectator is not None:
-      _update_spectator(spectator, sim_state)
-      # This is after the previous time step's step_fn() call.
-      spectator.after_step()
-      # Now prep the spectator for the following time step.
-      spectator.before_step()
 
     if first_step:
       # Initialize the sim_history with the initial state.
@@ -1176,7 +1179,7 @@ def run_simulation(
     # simulation history to the user for inspection.
     sim_error = sim_state.check_for_errors()
     if sim_error != state.SimError.NO_ERROR:
-      _log_sim_error(sim_error)
+      sim_error.log_error()
       break
     else:
       sim_history.append(sim_state)
@@ -1205,10 +1208,6 @@ def run_simulation(
       explicit_source_profiles=explicit_source_profiles,
       implicit_source_profiles=sim_state.core_sources,
   )
-  if spectator is not None:
-    # Complete the last time step.
-    _update_spectator(spectator, sim_state)
-    spectator.after_step()
 
   # If the first step of the simulation was very long, call it out. It might
   # have to do with tracing the jitted step_fn.
@@ -1239,73 +1238,6 @@ def run_simulation(
   )
   return output.ToraxSimOutputs(
       sim_error=sim_error, sim_history=tuple(sim_history)
-  )
-
-
-def _update_spectator(
-    spectator: spectator_lib.Spectator,
-    output_state: state.ToraxSimState,
-) -> None:
-  """Updates the spectator with values from the output state."""
-  spectator.observe(key='q_face', data=output_state.core_profiles.q_face)
-  spectator.observe(key='s_face', data=output_state.core_profiles.s_face)
-  spectator.observe(key='ne', data=output_state.core_profiles.ne.value)
-  spectator.observe(
-      key='temp_ion',
-      data=output_state.core_profiles.temp_ion.value,
-  )
-  spectator.observe(
-      key='temp_el',
-      data=output_state.core_profiles.temp_el.value,
-  )
-  spectator.observe(
-      key='j_bootstrap_face',
-      data=output_state.core_profiles.currents.j_bootstrap_face,
-  )
-  spectator.observe(
-      key='johm',
-      data=output_state.core_profiles.currents.johm,
-  )
-  spectator.observe(
-      key='generic_current_source',
-      data=output_state.core_profiles.currents.generic_current_source,
-  )
-  spectator.observe(
-      key='jtot_face',
-      data=output_state.core_profiles.currents.jtot_face,
-  )
-  spectator.observe(
-      key='chi_face_ion', data=output_state.core_transport.chi_face_ion
-  )
-  spectator.observe(
-      key='chi_face_el', data=output_state.core_transport.chi_face_el
-  )
-  spectator.observe(
-      key='Qext_i',
-      data=output_state.core_sources.get_profile(
-          'generic_ion_el_heat_source_ion'
-      ),
-  )
-  spectator.observe(
-      key='Qext_e',
-      data=output_state.core_sources.get_profile(
-          'generic_ion_el_heat_source_el'
-      ),
-  )
-  spectator.observe(
-      key='Qfus_i',
-      data=output_state.core_sources.get_profile('fusion_heat_source_ion'),
-  )
-  spectator.observe(
-      key='Qfus_e',
-      data=output_state.core_sources.get_profile('fusion_heat_source_el'),
-  )
-  spectator.observe(
-      key='Qohm',
-      data=output_state.core_sources.get_profile('ohmic_heat_source'),
-  )
-  spectator.observe(
-      key='Qei', data=output_state.core_sources.get_profile('qei_source')
   )
 
 
@@ -1419,33 +1351,16 @@ def update_current_distribution(
 
   bootstrap_profile = source_models.j_bootstrap.get_value(
       dynamic_runtime_params_slice=dynamic_runtime_params_slice,
-      dynamic_source_runtime_params=dynamic_runtime_params_slice.sources[
-          source_models.j_bootstrap_name
-      ],
       static_runtime_params_slice=static_runtime_params_slice,
-      static_source_runtime_params=static_runtime_params_slice.sources[
-          source_models.j_bootstrap_name
-      ],
       geo=geo,
       core_profiles=core_profiles,
-  )
-
-  # Calculate splitting of currents depending on input runtime params.
-  dynamic_generic_current_params = (
-      core_profile_setters.get_generic_current_params(
-          dynamic_runtime_params_slice, source_models
-      )
   )
 
   # calculate "External" current profile (e.g. ECCD)
   # form of external current on face grid
   generic_current_face = source_models.generic_current_source.get_value(
       dynamic_runtime_params_slice=dynamic_runtime_params_slice,
-      dynamic_source_runtime_params=dynamic_generic_current_params,
       static_runtime_params_slice=static_runtime_params_slice,
-      static_source_runtime_params=static_runtime_params_slice.sources[
-          source_models.generic_current_source_name
-      ],
       geo=geo,
       core_profiles=core_profiles,
   )
@@ -1595,9 +1510,6 @@ def get_initial_source_profiles(
   qei = source_models.qei_source.get_qei(
       static_runtime_params_slice=static_runtime_params_slice,
       dynamic_runtime_params_slice=dynamic_runtime_params_slice,
-      dynamic_source_runtime_params=dynamic_runtime_params_slice.sources[
-          source_models.qei_source_name
-      ],
       geo=geo,
       core_profiles=core_profiles,
   )

@@ -16,20 +16,23 @@
 
 import dataclasses
 from typing import Callable
+
 from absl.testing import absltest
 from absl.testing import parameterized
 import jax
 from jax import numpy as jnp
 import numpy as np
 from torax import core_profile_setters
-from torax import geometry
 from torax import physics
 from torax import state
 from torax.config import runtime_params_slice
 from torax.fvm import cell_variable
+from torax.geometry import geometry
+from torax.sources import generic_current_source
 from torax.sources import runtime_params as source_runtime_params
 from torax.sources import source_models as source_models_lib
 from torax.tests.test_lib import torax_refs
+
 
 _trapz = jax.scipy.integrate.trapezoid
 
@@ -108,9 +111,9 @@ class PhysicsTest(torax_refs.ReferenceValueTest):
     runtime_params = references.runtime_params
     source_models_builder = source_models_lib.SourceModelsBuilder()
     # Turn on the external current source.
-    source_models_builder.runtime_params['generic_current_source'].mode = (
-        source_runtime_params.Mode.FORMULA_BASED
-    )
+    source_models_builder.runtime_params[
+        generic_current_source.GenericCurrentSource.SOURCE_NAME
+    ].mode = source_runtime_params.Mode.MODEL_BASED
     source_models = source_models_builder()
     dynamic_runtime_params_slice, geo = (
         torax_refs.build_consistent_dynamic_runtime_params_slice_and_geometry(
@@ -120,8 +123,9 @@ class PhysicsTest(torax_refs.ReferenceValueTest):
         )
     )
     static_slice = runtime_params_slice.build_static_runtime_params_slice(
-        runtime_params,
+        runtime_params=runtime_params,
         source_runtime_params=source_models_builder.runtime_params,
+        torax_mesh=geo.torax_mesh,
     )
     initial_core_profiles = core_profile_setters.initial_core_profiles(
         static_slice,
@@ -287,6 +291,23 @@ class PhysicsTest(torax_refs.ReferenceValueTest):
         physics._calculate_weighted_Zeff(core_profiles), expected
     )
     # pylint: enable=protected-access
+
+  # TODO(b/377225415): generalize to arbitrary number of ions.
+  # pylint: disable=invalid-name
+  @parameterized.parameters([
+      dict(Zi=1.0, Zimp=10.0, Zeff=1.0, expected=1.0),
+      dict(Zi=1.0, Zimp=5.0, Zeff=1.0, expected=1.0),
+      dict(Zi=2.0, Zimp=10.0, Zeff=2.0, expected=0.5),
+      dict(Zi=2.0, Zimp=5.0, Zeff=2.0, expected=0.5),
+      dict(Zi=1.0, Zimp=10.0, Zeff=1.9, expected=0.9),
+      dict(Zi=2.0, Zimp=10.0, Zeff=3.6, expected=0.4),
+  ])
+  def test_get_main_ion_dilution_factor(self, Zi, Zimp, Zeff, expected):
+    """Unit test of `get_main_ion_dilution_factor`."""
+    np.testing.assert_allclose(
+        physics.get_main_ion_dilution_factor(Zi, Zimp, Zeff), expected
+    )
+  # pylint: enable=invalid-name
 
   def test_calculate_plh_scaling_factor(self):
     """Compare `calculate_plh_scaling_factor` to a reference value."""
@@ -477,7 +498,7 @@ class PhysicsTest(torax_refs.ReferenceValueTest):
         * 20**0.41
         * 50**-0.69
         * 6**1.97
-        * (1/3)**0.58
+        * (1 / 3) ** 0.58
         * 3**0.19
         * elongation_LCFS**0.78
     )
@@ -489,7 +510,7 @@ class PhysicsTest(torax_refs.ReferenceValueTest):
         * 20**0.4
         * 50**-0.73
         * 6**1.83
-        * (1/3)**-0.06
+        * (1 / 3) ** -0.06
         * 3**0.20
         * elongation_LCFS**0.64
     )
@@ -501,7 +522,7 @@ class PhysicsTest(torax_refs.ReferenceValueTest):
         * 20**0.24
         * 50**-0.669
         * 6**1.71
-        * (1/3)**0.35
+        * (1 / 3) ** 0.35
         * 3**0.20
         * elongation_LCFS**0.80
     )

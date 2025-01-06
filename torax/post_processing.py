@@ -21,11 +21,11 @@ import jax
 from jax import numpy as jnp
 from torax import array_typing
 from torax import constants
-from torax import geometry
 from torax import jax_utils
 from torax import math_utils
 from torax import physics
 from torax import state
+from torax.geometry import geometry
 from torax.sources import source_profiles
 
 _trapz = jax.scipy.integrate.trapezoid
@@ -312,6 +312,25 @@ def _calculate_integrated_sources(
   return integrated
 
 
+@jax_utils.jit
+def _calculate_q95(
+    psi_norm_face: array_typing.ArrayFloat,
+    core_profiles: state.CoreProfiles,
+) -> array_typing.ScalarFloat:
+  """Calculates q95 from the q profile and the normalized poloidal flux.
+
+  Args:
+    psi_norm_face: normalized poloidal flux
+    core_profiles: Kinetic profiles such as temperature and density
+
+  Returns:
+    q95: q at 95% of the normalized poloidal flux
+  """
+  q95 = jnp.interp(0.95, psi_norm_face, core_profiles.q_face)
+
+  return q95
+
+
 def make_outputs(
     sim_state: state.ToraxSimState,
     geo: geometry.Geometry,
@@ -381,13 +400,13 @@ def make_outputs(
   tauE = W_thermal_tot / Ploss
 
   tauH98 = physics.calculate_scaling_law_confinement_time(
-      geo, sim_state.core_profiles, Ploss/1e6, 'H98'
+      geo, sim_state.core_profiles, Ploss / 1e6, 'H98'
   )
   tauH97L = physics.calculate_scaling_law_confinement_time(
-      geo, sim_state.core_profiles, Ploss/1e6, 'H97L'
+      geo, sim_state.core_profiles, Ploss / 1e6, 'H97L'
   )
   tauH20 = physics.calculate_scaling_law_confinement_time(
-      geo, sim_state.core_profiles, Ploss/1e6, 'H20'
+      geo, sim_state.core_profiles, Ploss / 1e6, 'H20'
   )
 
   H98 = tauE / tauH98
@@ -426,6 +445,38 @@ def make_outputs(
     E_cumulative_external = (
         sim_state.post_processed_outputs.E_cumulative_external
     )
+
+  # Calculate q at 95% of the normalized poloidal flux
+  q95 = _calculate_q95(psi_norm_face, sim_state.core_profiles)
+
+  # Calculate te and ti volume average [keV]
+  te_volume_avg = (
+      math_utils.cell_integration(
+          sim_state.core_profiles.temp_el.value * geo.vpr, geo
+      )
+      / geo.volume[-1]
+  )
+  ti_volume_avg = (
+      math_utils.cell_integration(
+          sim_state.core_profiles.temp_ion.value * geo.vpr, geo
+      )
+      / geo.volume[-1]
+  )
+
+  # Calculate ne and ni (main ion) volume average [nref m^-3]
+  ne_volume_avg = (
+      math_utils.cell_integration(
+          sim_state.core_profiles.ne.value * geo.vpr, geo
+      )
+      / geo.volume[-1]
+  )
+  ni_volume_avg = (
+      math_utils.cell_integration(
+          sim_state.core_profiles.ni.value * geo.vpr, geo
+      )
+      / geo.volume[-1]
+  )
+
   # pylint: enable=invalid-name
   updated_post_processed_outputs = dataclasses.replace(
       sim_state.post_processed_outputs,
@@ -450,6 +501,11 @@ def make_outputs(
       ne_min_P_LH=ne_min_P_LH,
       E_cumulative_fusion=E_cumulative_fusion,
       E_cumulative_external=E_cumulative_external,
+      te_volume_avg=te_volume_avg,
+      ti_volume_avg=ti_volume_avg,
+      ne_volume_avg=ne_volume_avg,
+      ni_volume_avg=ni_volume_avg,
+      q95=q95,
   )
   # pylint: enable=invalid-name
   return dataclasses.replace(

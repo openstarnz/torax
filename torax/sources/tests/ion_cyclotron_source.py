@@ -25,11 +25,10 @@ import jax
 from jax import numpy as jnp
 import numpy as np
 from torax import core_profile_setters
-from torax import geometry
 from torax.config import runtime_params as general_runtime_params
 from torax.config import runtime_params_slice
+from torax.geometry import geometry
 from torax.sources import ion_cyclotron_source
-from torax.sources import runtime_params as runtime_params_lib
 from torax.sources import source as source_lib
 from torax.sources import source_models as source_models_lib
 from torax.sources.tests import test_lib
@@ -92,13 +91,15 @@ class IonCyclotronSourceTest(test_lib.SourceTestCase):
     )
     # pylint: enable=protected-access
     with open(_DUMMY_MODEL_PATH, "w") as f:
-      json.dump(model_config, f)
+      json.dump(model_config, f, indent=4, separators=(",", ":"))
     cls.dummy_input = model_input
     cls.dummy_output = model_output
     super().setUpClass(
         source_class=ion_cyclotron_source.IonCyclotronSource,
         runtime_params_class=ion_cyclotron_source.RuntimeParams,
-        unsupported_modes=[runtime_params_lib.Mode.FORMULA_BASED],
+        source_class_builder=ion_cyclotron_source.IonCyclotronSourceBuilder,
+        source_name=ion_cyclotron_source.IonCyclotronSource.SOURCE_NAME,
+        model_func=None,
     )
 
   @parameterized.product(
@@ -152,8 +153,9 @@ class IonCyclotronSourceTest(test_lib.SourceTestCase):
         )
     )
     static_slice = runtime_params_slice.build_static_runtime_params_slice(
-        runtime_params,
+        runtime_params=runtime_params,
         source_runtime_params=source_models_builder.runtime_params,
+        torax_mesh=geo.torax_mesh,
     )
     core_profiles = core_profile_setters.initial_core_profiles(
         dynamic_runtime_params_slice=dynamic_runtime_params_slice,
@@ -163,13 +165,7 @@ class IonCyclotronSourceTest(test_lib.SourceTestCase):
     )
     icrh_output = icrh_source.get_value(
         static_slice,
-        static_slice.sources[
-            ion_cyclotron_source.IonCyclotronSource.SOURCE_NAME
-        ],
         dynamic_runtime_params_slice,
-        dynamic_runtime_params_slice.sources[
-            ion_cyclotron_source.IonCyclotronSource.SOURCE_NAME
-        ],
         geo,
         core_profiles,
     )
@@ -177,27 +173,29 @@ class IonCyclotronSourceTest(test_lib.SourceTestCase):
     # Implicit integration using the trapezoid rule.
     integrated_power = jnp.sum(ion_el_total * geo.vpr * geo.drho_norm)
 
-    np.testing.assert_allclose(integrated_power, total_power,)
+    np.testing.assert_allclose(
+        integrated_power,
+        total_power,
+    )
 
-  def test_toric_nn_loads_and_predicts_with_dummy_model(self):
+  @classmethod
+  def test_toric_nn_loads_and_predicts_with_dummy_model(cls):
     """Test that the ToricNNWrapper loads and predicts consistently."""
     # Load the model and verify the prediction are consistent with the output
     # of the dummy network.
-    toric_wrapper = ion_cyclotron_source.ToricNNWrapper(
-        path=_DUMMY_MODEL_PATH
-    )
-    wrapper_output = toric_wrapper.predict(self.dummy_input)
+    toric_wrapper = ion_cyclotron_source.ToricNNWrapper(path=_DUMMY_MODEL_PATH)
+    wrapper_output = toric_wrapper.predict(cls.dummy_input)
     np.testing.assert_array_equal(
         wrapper_output.power_deposition_He3,
-        self.dummy_output,
+        cls.dummy_output,
     )
     np.testing.assert_array_equal(
         wrapper_output.power_deposition_2T,
-        self.dummy_output,
+        cls.dummy_output,
     )
     np.testing.assert_array_equal(
         wrapper_output.power_deposition_e,
-        self.dummy_output,
+        cls.dummy_output,
     )
     # pylint: enable=protected-access
 
@@ -216,10 +214,12 @@ class IonCyclotronSourceTest(test_lib.SourceTestCase):
     runtime_params = general_runtime_params.GeneralRuntimeParams()
     geo = geometry.build_circular_geometry()
     source_models_builder = source_models_lib.SourceModelsBuilder(
-        {"foo": source_builder},
+        {ion_cyclotron_source.IonCyclotronSource.SOURCE_NAME: source_builder},
     )
     source_models = source_models_builder()
-    source = source_models.sources["foo"]
+    source = source_models.sources[
+        ion_cyclotron_source.IonCyclotronSource.SOURCE_NAME
+    ]
     self.assertIsInstance(source, source_lib.Source)
     dynamic_runtime_params_slice = (
         runtime_params_slice.DynamicRuntimeParamsSliceProvider(
@@ -231,8 +231,9 @@ class IonCyclotronSourceTest(test_lib.SourceTestCase):
         )
     )
     static_slice = runtime_params_slice.build_static_runtime_params_slice(
-        runtime_params,
+        runtime_params=runtime_params,
         source_runtime_params=source_models_builder.runtime_params,
+        torax_mesh=geo.torax_mesh,
     )
     core_profiles = core_profile_setters.initial_core_profiles(
         dynamic_runtime_params_slice=dynamic_runtime_params_slice,
@@ -242,11 +243,7 @@ class IonCyclotronSourceTest(test_lib.SourceTestCase):
     )
     ion_and_el = source.get_value(
         dynamic_runtime_params_slice=dynamic_runtime_params_slice,
-        dynamic_source_runtime_params=dynamic_runtime_params_slice.sources[
-            "foo"
-        ],
         static_runtime_params_slice=static_slice,
-        static_source_runtime_params=static_slice.sources["foo"],
         geo=geo,
         core_profiles=core_profiles,
     )
