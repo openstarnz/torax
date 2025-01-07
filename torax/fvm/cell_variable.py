@@ -29,11 +29,6 @@ import jax
 from jax import numpy as jnp
 
 
-def _zero() -> jax.Array:
-  """Returns a scalar zero as a jax Array."""
-  return jnp.zeros(())
-
-
 @chex.dataclass(frozen=True)
 class CellVariable:
   """A variable representing values of the cells along the radius.
@@ -68,9 +63,6 @@ class CellVariable:
   left_face_grad_constraint: Optional[jax.Array] = None
   right_face_grad_constraint: Optional[jax.Array] = None
   history: Optional[bool] = None
-
-  # Can't make the above default values be jax zeros because that would be a
-  # call to jax before absl.app.run
 
   def project(self, weights):
     assert self.history is not None
