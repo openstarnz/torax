@@ -195,7 +195,10 @@ def _updated_ion_density(
       dr=geo.drho_norm,
       left_face_grad_constraint=jnp.array(0.0),
       right_face_constraint=jnp.array(
-          jax_utils.error_if(ne.right_face_consx, ne.right_face_consx_is_grad) * dilution_factor_edge
+          jax_utils.error_if(
+              ne.right_face_consx, ne.right_face_consx_is_grad,
+              'Only Dirichlet boundaries are currently supported for ne'
+          ) * dilution_factor_edge
       ),
   )
 
@@ -911,7 +914,8 @@ def compute_boundary_conditions(
       dynamic_runtime_params_slice,
       geo,
   )
-  ne_bound_right = jax_utils.error_if(ne.right_face_consx, ne.right_face_consx_is_grad)
+  ne_bound_right = jax_utils.error_if(ne.right_face_consx, ne.right_face_consx_is_grad,
+                                      'Only Dirichlet boundaries are currently supported for ne')
 
   # define ion profile based on (flat) Zeff and single assumed impurity
   # with Zimp. main ion limited to hydrogenic species for now.
