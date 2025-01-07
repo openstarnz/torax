@@ -122,11 +122,7 @@ class CellVariable:
     """
     # Automatically check dtypes of all numeric fields
     for name, value in self.items():
-      if name == 'history':
-        # This is allowed to be a jax Array of bools that are all True, so it
-        # shouldn't go through the same check as the other variables.
-        continue
-      if isinstance(value, jax.Array):
+      if isinstance(value, jax.Array) and value.dtype != jnp.bool_:
         if value.dtype != jnp.float64 and jax.config.read('jax_enable_x64'):
           raise TypeError(
               f'Expected dtype float64, got dtype {value.dtype} for `{name}`'
