@@ -299,13 +299,13 @@ class PhysicsTest(torax_refs.ReferenceValueTest):
         B0=5.0,
     )
     core_profiles = state.CoreProfiles(
-        ne=cell_variable.CellVariable(
+        ne=cell_variable.CellVariable.of(
             value=jnp.ones_like(geo.rho_norm) * 2,
             left_face_grad_constraint=jnp.array(0.0),
             right_face_constraint=jnp.array(2.0),
             dr=geo.drho_norm,
         ),
-        ni=cell_variable.CellVariable(
+        ni=cell_variable.CellVariable.of(
             value=jnp.ones_like(geo.rho_norm) * 1,
             left_face_grad_constraint=jnp.array(0.0),
             right_face_constraint=jnp.array(1.0),
@@ -362,49 +362,50 @@ class PhysicsTest(torax_refs.ReferenceValueTest):
         B0=5.0,
     )
     core_profiles = state.CoreProfiles(
-        ne=cell_variable.CellVariable(
+      # TODO: Cell variable factory
+        ne=cell_variable.CellVariable.of(
             value=jnp.ones_like(geo.rho_norm) * 2,
             left_face_grad_constraint=jnp.zeros(()),
             right_face_grad_constraint=None,
             right_face_constraint=jnp.array(2.0),
             dr=geo.drho_norm,
         ),
-        ni=cell_variable.CellVariable(
+        ni=cell_variable.CellVariable.of(
             value=jnp.ones_like(geo.rho_norm) * 2,
             left_face_grad_constraint=jnp.zeros(()),
             right_face_grad_constraint=None,
             right_face_constraint=jnp.array(1.0),
             dr=geo.drho_norm,
         ),
-        nimp=cell_variable.CellVariable(
+        nimp=cell_variable.CellVariable.of(
             value=jnp.ones_like(geo.rho_norm) * 0,
             left_face_grad_constraint=jnp.zeros(()),
             right_face_grad_constraint=None,
             right_face_constraint=jnp.array(0.0),
             dr=geo.drho_norm,
         ),
-        temp_ion=cell_variable.CellVariable(
+        temp_ion=cell_variable.CellVariable.of(
             value=jnp.ones_like(geo.rho_norm) * 0,
             left_face_grad_constraint=jnp.zeros(()),
             right_face_grad_constraint=None,
             right_face_constraint=jnp.array(0.0),
             dr=geo.drho_norm,
         ),
-        temp_el=cell_variable.CellVariable(
+        temp_el=cell_variable.CellVariable.of(
             value=jnp.ones_like(geo.rho_norm) * 0,
             left_face_grad_constraint=jnp.zeros(()),
             right_face_grad_constraint=None,
             right_face_constraint=jnp.array(0.0),
             dr=geo.drho_norm,
         ),
-        psi=cell_variable.CellVariable(
+        psi=cell_variable.CellVariable.of(
             value=jnp.ones_like(geo.rho_norm) * 0,
             left_face_grad_constraint=jnp.zeros(()),
             right_face_grad_constraint=None,
             right_face_constraint=jnp.array(0.0),
             dr=geo.drho_norm,
         ),
-        psidot=cell_variable.CellVariable(
+        psidot=cell_variable.CellVariable.of(
             value=jnp.ones_like(geo.rho_norm) * 0,
             left_face_grad_constraint=jnp.zeros(()),
             right_face_grad_constraint=None,
@@ -479,7 +480,7 @@ class PhysicsTest(torax_refs.ReferenceValueTest):
     np.testing.assert_allclose(H20, expected_H20)
 
   def _make_cell_variable(self, val, dr):
-    return cell_variable.CellVariable(
+    return cell_variable.CellVariable.of(
         value=jnp.array(val),
         dr=jnp.array(dr),
         left_face_grad_constraint=jnp.array(0.0),

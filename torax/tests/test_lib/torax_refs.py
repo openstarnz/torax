@@ -96,7 +96,7 @@ def circular_references() -> References:
   )
   # ground truth values copied from example executions using
   # array.astype(str),which allows fully lossless reloading
-  psi = fvm.cell_variable.CellVariable(
+  psi = fvm.cell_variable.CellVariable.of(
       value=jnp.array(
           np.array([
               5.20759356768568e-02,
@@ -252,7 +252,7 @@ def chease_references_Ip_from_chease() -> References:  # pylint: disable=invalid
   )
   # ground truth values copied from an example PINT execution using
   # array.astype(str),which allows fully lossless reloading
-  psi = fvm.cell_variable.CellVariable(
+  psi = fvm.cell_variable.CellVariable.of(
       value=jnp.array(
           np.array([
               2.82691562998223e-02,
@@ -408,7 +408,7 @@ def chease_references_Ip_from_runtime_params() -> References:  # pylint: disable
   )
   # ground truth values copied from an example executions using
   # array.astype(str),which allows fully lossless reloading
-  psi = fvm.cell_variable.CellVariable(
+  psi = fvm.cell_variable.CellVariable.of(
       value=jnp.array(
           np.array([
               3.60277713715760e-02,

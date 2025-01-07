@@ -54,34 +54,22 @@ def make_diffusion_terms(
     )
 
   # Boundary rows need to be special-cased.
-  #
-  # Check that the boundary conditions are well-posed.
-  # These checks are redundant with CellVariable.__post_init__, but including
-  # them here for readability because they're in important part of the logic
-  # of this function.
-  chex.assert_exactly_one_is_none(
-      var.left_face_grad_constraint, var.left_face_constraint
-  )
-  chex.assert_exactly_one_is_none(
-      var.right_face_grad_constraint, var.right_face_constraint
-  )
-
-  if var.left_face_constraint is not None:
+  if not var.left_face_consx_is_grad:
     # Left face Dirichlet condition
     diag = diag.at[0].set(-2 * d_face[0] - d_face[1])
-    vec = vec.at[0].set(2 * d_face[0] * var.left_face_constraint / denom)
+    vec = vec.at[0].set(2 * d_face[0] * var.left_face_consx / denom)
   else:
     # Left face gradient condition
     diag = diag.at[0].set(-d_face[1])
-    vec = vec.at[0].set(-d_face[0] * var.left_face_grad_constraint / var.dr)
-  if var.right_face_constraint is not None:
+    vec = vec.at[0].set(-d_face[0] * var.left_face_consx / var.dr)
+  if not var.left_face_consx_is_grad:
     # Right face Dirichlet condition
     diag = diag.at[-1].set(-2 * d_face[-1] - d_face[-2])
-    vec = vec.at[-1].set(2 * d_face[-1] * var.right_face_constraint / denom)
+    vec = vec.at[-1].set(2 * d_face[-1] * var.right_face_consx / denom)
   else:
     # Right face gradient constraint
     diag = diag.at[-1].set(-d_face[-2])
-    vec = vec.at[-1].set(d_face[-1] * var.right_face_grad_constraint / var.dr)
+    vec = vec.at[-1].set(d_face[-1] * var.right_face_consx / var.dr)
 
   # Build the matrix
   mat = math_utils.tridiag(diag, off, off) / denom

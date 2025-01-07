@@ -221,12 +221,12 @@ class InitialStatesTest(parameterized.TestCase):
         source_models=source_models,
     )
     np.testing.assert_allclose(
-        core_profiles.temp_ion.right_face_constraint, 27.7
+        core_profiles.temp_ion.right_face_consx, 27.7
     )
     np.testing.assert_allclose(
-        core_profiles.temp_el.right_face_constraint, 42.0
+        core_profiles.temp_el.right_face_consx, 42.0
     )
-    np.testing.assert_allclose(core_profiles.ne.right_face_constraint, 0.1)
+    np.testing.assert_allclose(core_profiles.ne.right_face_consx, 0.1)
 
   def test_core_profiles_quasineutrality_check(self):
     """Tests core_profiles quasineutrality check on initial state."""

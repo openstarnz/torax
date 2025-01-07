@@ -122,10 +122,10 @@ class CoreProfileSettersTest(parameterized.TestCase):
     )
     Ti_bound_right = core_profile_setters.updated_ion_temperature(
         dynamic_slice, geo
-    ).right_face_constraint
+    ).right_face_consx
     Te_bound_right = core_profile_setters.updated_electron_temperature(
         dynamic_slice, geo
-    ).right_face_constraint
+    ).right_face_consx
     self.assertEqual(
         Ti_bound_right,
         expected_Ti_bound_right,
@@ -292,7 +292,7 @@ class CoreProfileSettersTest(parameterized.TestCase):
         self.geo,
     )
     np.testing.assert_allclose(
-        ne.right_face_constraint,
+        ne.right_face_consx,
         expected_value,
         atol=1e-6,
         rtol=1e-6,
@@ -511,12 +511,12 @@ class CoreProfileSettersTest(parameterized.TestCase):
           / dynamic_runtime_params_slice.numerics.nref
       )
       np.testing.assert_allclose(
-          boundary_conditions['ne']['right_face_constraint'],
+          boundary_conditions['ne']['right_face_consx'],
           expected_ne_bound_right * nGW,
       )
     else:
       np.testing.assert_allclose(
-          boundary_conditions['ne']['right_face_constraint'],
+          boundary_conditions['ne']['right_face_consx'],
           expected_ne_bound_right,
       )
 
@@ -597,7 +597,7 @@ class CoreProfileSettersTest(parameterized.TestCase):
     )
 
     self.assertEqual(
-        boundary_conditions['temp_el']['right_face_constraint'],
+        boundary_conditions['temp_el']['right_face_consx'],
         expected_Te_bound_right,
     )
 
@@ -633,7 +633,7 @@ class CoreProfileSettersTest(parameterized.TestCase):
     )
 
     self.assertEqual(
-        boundary_conditions['temp_ion']['right_face_constraint'],
+        boundary_conditions['temp_ion']['right_face_consx'],
         expected_Ti_bound_right,
     )
 
