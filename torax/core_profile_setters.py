@@ -190,7 +190,7 @@ def _updated_ion_density(
       Zi, Zimp, Zeff_face[-1]
   )
 
-  assert ne.right_face_consx_is_grad
+  assert not ne.right_face_consx_is_grad
 
   ni = cell_variable.CellVariable.of(
       value=ne.value * dilution_factor,
