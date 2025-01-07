@@ -18,6 +18,7 @@ Builds the diffusion terms of the discrete matrix equation.
 """
 
 import chex
+import jax
 from jax import numpy as jnp
 from torax import math_utils
 from torax.fvm import cell_variable
@@ -54,22 +55,28 @@ def make_diffusion_terms(
     )
 
   # Boundary rows need to be special-cased.
-  if not var.left_face_consx_is_grad:
-    # Left face Dirichlet condition
-    diag = diag.at[0].set(-2 * d_face[0] - d_face[1])
-    vec = vec.at[0].set(2 * d_face[0] * var.left_face_consx / denom)
-  else:
-    # Left face gradient condition
-    diag = diag.at[0].set(-d_face[1])
-    vec = vec.at[0].set(-d_face[0] * var.left_face_consx / var.dr)
-  if not var.left_face_consx_is_grad:
-    # Right face Dirichlet condition
-    diag = diag.at[-1].set(-2 * d_face[-1] - d_face[-2])
-    vec = vec.at[-1].set(2 * d_face[-1] * var.right_face_consx / denom)
-  else:
-    # Right face gradient constraint
-    diag = diag.at[-1].set(-d_face[-2])
-    vec = vec.at[-1].set(d_face[-1] * var.right_face_consx / var.dr)
+  # Left face
+  diag.at[0].set(jax.lax.cond(
+    var.left_face_consx_is_grad,
+    lambda: -d_face[1],
+    lambda: -2 * d_face[0] - d_face[1],
+  ))
+  vec.at[0].set(jax.lax.cond(
+    var.left_face_consx_is_grad,
+    lambda: -d_face[0] * var.left_face_consx / var.dr,
+    lambda: 2 * d_face[0] * var.left_face_consx / denom,
+  ))
+  # Right face
+  diag.at[-1].set(jax.lax.cond(
+    var.right_face_consx_is_grad,
+    lambda: -d_face[-2],
+    lambda: -2 * d_face[-1] - d_face[-2],
+  ))
+  vec.at[-1].set(jax.lax.cond(
+    var.right_face_consx_is_grad,
+    lambda: d_face[-1] * var.right_face_consx / var.dr,
+    lambda: 2 * d_face[-1] * var.right_face_consx / denom,
+  ))
 
   # Build the matrix
   mat = math_utils.tridiag(diag, off, off) / denom

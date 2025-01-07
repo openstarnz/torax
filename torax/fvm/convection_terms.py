@@ -124,80 +124,64 @@ def make_convection_terms(
         ' is affected by both boundary conditions.'
     )
 
-  # Boundary rows need to be special-cased.
-  if not var.left_face_consx_is_grad:
-    # Dirichlet condition at leftmost face
+  # TODO: Write tests for the convection and diffusion term calculation functions
+  def dirichlet_boundary(face_consx, alpha, opp_alpha, right: bool):
+    def lr(l, r):
+      return r if right else l
     if dirichlet_mode == 'ghost':
-      mat_value = (
-          v_face[0] * (2.0 * left_alpha[0] - 1.0) - v_face[1] * right_alpha[0]
-      ) / var.dr
-      vec_value = (
-          2.0 * v_face[0] * (1.0 - left_alpha[0]) * var.left_face_consx
-      ) / var.dr
+      if right:
+        mat_value = (
+            v_face[-2] * left_alpha[-1] + v_face[-1] * (1.0 - 2.0 * right_alpha[-1])
+        ) / var.dr
+        vec_value = (
+            -2.0 * v_face[-1] * (1.0 - right_alpha[-1]) * var.right_face_consx
+        ) / var.dr
+      else:
+        mat_value = (
+            v_face[0] * (2.0 * left_alpha[0] - 1.0) - v_face[1] * right_alpha[0]
+        ) / var.dr
+        vec_value = (
+            2.0 * v_face[0] * (1.0 - left_alpha[0]) * var.left_face_consx
+        ) / var.dr
     elif dirichlet_mode == 'direct':
-      vec_value = v_face[0] * var.left_face_consx / var.dr
-      mat_value = -v_face[1] * right_alpha[0]
+      mat_value = lr(-1, 1) * v_face[lr(1, -2)] * opp_alpha[lr(0, -1)] / var.dr
+      vec_value = lr(1, -1) * v_face[lr(0, -1)] * face_consx / var.dr
     elif dirichlet_mode == 'semi-implicit':
+      mat_value = mat[lr(0, -1), lr(0, -1)]
       vec_value = (
-          v_face[0] * (1.0 - left_alpha[0]) * var.left_face_consx
+          lr(1, -1) * v_face[lr(0, -1)] * (1.0 - alpha[lr(0, -1)]) * face_consx
       ) / var.dr
-      mat_value = mat[0, 0]
-      print('left vec_value: ', vec_value)
     else:
       raise ValueError(dirichlet_mode)
-  else:
-    # Gradient boundary condition at leftmost face
-    mat_value = (v_face[0] - right_alpha[0] * v_face[1]) / var.dr
-    vec_value = (
-        -v_face[0] * (1.0 - left_alpha[0]) * var.left_face_consx
-    )
+    return mat_value, vec_value
+
+  def neumann_boundary(face_consx, alpha, opp_alpha, right: bool):
+    def lr(l, r):
+      return r if right else l
+    mat_value = lr(1, -1) * (v_face[lr(0, 1)] - opp_alpha[lr(0, -1)] * v_face[lr(1, -2)]) / var.dr
+    vec_value = -v_face[lr(0, -1)] * (1.0 - alpha[lr(0, -1)]) * face_consx
     if neumann_mode == 'ghost':
       pass  # no adjustment needed
     elif neumann_mode == 'semi-implicit':
       vec_value /= 2.0
     else:
       raise ValueError(neumann_mode)
+    return mat_value, vec_value
 
+  # Boundary rows need to be special-cased.
+  mat_value, vec_value = jax.lax.cond(
+      var.left_face_consx_is_grad,
+      lambda: dirichlet_boundary(var.left_face_consx, left_alpha, right_alpha, False),
+      lambda: neumann_boundary(var.left_face_consx, left_alpha, right_alpha, False),
+  )
   mat = mat.at[0, 0].set(mat_value)
   vec = vec.at[0].set(vec_value)
 
-  if not var.right_face_consx_is_grad:
-    # Dirichlet condition at rightmost face
-    if dirichlet_mode == 'ghost':
-      mat_value = (
-          v_face[-2] * left_alpha[-1]
-          + v_face[-1] * (1.0 - 2.0 * right_alpha[-1])
-      ) / var.dr
-      vec_value = (
-          -2.0
-          * v_face[-1]
-          * (1.0 - right_alpha[-1])
-          * var.right_face_consx
-      ) / var.dr
-    elif dirichlet_mode == 'direct':
-      mat_value = v_face[-2] * left_alpha[-1] / var.dr
-      vec_value = -v_face[-1] * var.right_face_consx / var.dr
-    elif dirichlet_mode == 'semi-implicit':
-      mat_value = mat[-1, -1]
-      vec_value = (
-          -(v_face[-1] * (1.0 - right_alpha[-1]) * var.right_face_consx)
-          / var.dr
-      )
-    else:
-      raise ValueError(dirichlet_mode)
-  else:
-    # Gradient boundary condition at rightmost face
-    mat_value = -(v_face[-1] - v_face[-2] * left_alpha[-1]) / var.dr
-    vec_value = (
-        -v_face[-1] * (1.0 - right_alpha[-1]) * var.right_face_consx
-    )
-    if neumann_mode == 'ghost':
-      pass  # no adjustment needed
-    elif neumann_mode == 'semi-implicit':
-      vec_value /= 2.0
-    else:
-      raise ValueError(neumann_mode)
-
+  mat_value, vec_value = jax.lax.cond(
+      var.right_face_consx_is_grad,
+      lambda: dirichlet_boundary(var.right_face_consx, right_alpha, left_alpha, True),
+      lambda: neumann_boundary(var.right_face_consx, right_alpha, left_alpha, True),
+  )
   mat = mat.at[-1, -1].set(mat_value)
   vec = vec.at[-1].set(vec_value)
 

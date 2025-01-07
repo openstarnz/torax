@@ -190,14 +190,12 @@ def _updated_ion_density(
       Zi, Zimp, Zeff_face[-1]
   )
 
-  assert not ne.right_face_consx_is_grad
-
   ni = cell_variable.CellVariable.of(
       value=ne.value * dilution_factor,
       dr=geo.drho_norm,
       left_face_grad_constraint=jnp.array(0.0),
       right_face_constraint=jnp.array(
-          ne.right_face_consx * dilution_factor_edge
+          jax_utils.error_if(ne.right_face_consx, ne.right_face_consx_is_grad) * dilution_factor_edge
       ),
   )
 
@@ -913,8 +911,7 @@ def compute_boundary_conditions(
       dynamic_runtime_params_slice,
       geo,
   )
-  assert not ne.right_face_consx_is_grad
-  ne_bound_right = ne.right_face_consx
+  ne_bound_right = jax_utils.error_if(ne.right_face_consx, ne.right_face_consx_is_grad)
 
   # define ion profile based on (flat) Zeff and single assumed impurity
   # with Zimp. main ion limited to hydrogenic species for now.
