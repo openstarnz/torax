@@ -51,7 +51,7 @@ def updated_ion_temperature(
       Ti_bound_right,
       'Ti_bound_right',
   )
-  temp_ion = cell_variable.CellVariable(
+  temp_ion = cell_variable.CellVariable.of(
       value=dynamic_runtime_params_slice.profile_conditions.Ti,
       left_face_grad_constraint=jnp.array(0.0),
       right_face_constraint=Ti_bound_right,
@@ -75,7 +75,7 @@ def updated_electron_temperature(
       Te_bound_right,
       'Te_bound_right',
   )
-  temp_el = cell_variable.CellVariable(
+  temp_el = cell_variable.CellVariable.of(
       value=dynamic_runtime_params_slice.profile_conditions.Te,
       left_face_grad_constraint=jnp.array(0.0),
       right_face_constraint=Te_bound_right,
@@ -156,7 +156,7 @@ def _get_ne(
 
   ne_value = C * ne_value
 
-  ne = cell_variable.CellVariable(
+  ne = cell_variable.CellVariable.of(
       value=ne_value,
       dr=geo.drho_norm,
       left_face_grad_constraint=jnp.array(0.0),
@@ -190,7 +190,7 @@ def _updated_ion_density(
       Zi, Zimp, Zeff_face[-1]
   )
 
-  ni = cell_variable.CellVariable(
+  ni = cell_variable.CellVariable.of(
       value=ne.value * dilution_factor,
       dr=geo.drho_norm,
       left_face_grad_constraint=jnp.array(0.0),
@@ -199,7 +199,7 @@ def _updated_ion_density(
       ),
   )
 
-  nimp = cell_variable.CellVariable(
+  nimp = cell_variable.CellVariable.of(
       value=(ne.value - ni.value * Zi) / Zimp,
       dr=geo.drho_norm,
       left_face_grad_constraint=jnp.array(0.0),
@@ -541,7 +541,7 @@ def _update_psi_from_j(
 
   psi_value = jnp.interp(geo.rho_norm, geo.rho_hires_norm, psi_hires)
 
-  psi = cell_variable.CellVariable(
+  psi = cell_variable.CellVariable.of(
       value=psi_value,
       dr=geo.drho_norm,
       left_face_grad_constraint=jnp.array(0.0),
@@ -594,7 +594,7 @@ def _init_psi_and_current(
   """
   # Retrieving psi from the profile conditions.
   if dynamic_runtime_params_slice.profile_conditions.psi is not None:
-    psi = cell_variable.CellVariable(
+    psi = cell_variable.CellVariable.of(
         value=dynamic_runtime_params_slice.profile_conditions.psi,
         left_face_grad_constraint=jnp.array(0.0),
         right_face_grad_constraint=_calculate_psi_grad_constraint(
@@ -619,7 +619,7 @@ def _init_psi_and_current(
     # psi is already provided from a numerical equilibrium, so no need to
     # first calculate currents. However, non-inductive currents are still
     # calculated and used in current diffusion equation.
-    psi = cell_variable.CellVariable(
+    psi = cell_variable.CellVariable.of(
         value=geo.psi_from_Ip,
         left_face_grad_constraint=jnp.array(0.0),
         right_face_grad_constraint=_calculate_psi_grad_constraint(
@@ -711,13 +711,13 @@ def initial_core_profiles(
 
   # The later calculation needs core profiles.
   # So initialize these quantities with zeros.
-  psidot = cell_variable.CellVariable(
+  psidot = cell_variable.CellVariable.of(
       value=jnp.zeros_like(geo.rho),
       dr=geo.drho_norm,
       left_face_grad_constraint=jnp.array(0.0),
       right_face_grad_constraint=jnp.array(0.0),
   )
-  psi = cell_variable.CellVariable(
+  psi = cell_variable.CellVariable.of(
       value=jnp.zeros_like(geo.rho),
       dr=geo.drho_norm,
       left_face_grad_constraint=jnp.array(0.0),

@@ -83,7 +83,7 @@ class FVMTest(torax_refs.ReferenceValueTest):
 
     # Use ref_config to configure size, so we can also use ref_geo
     value = jnp.zeros(geo.torax_mesh.nx)
-    variable = cell_variable.CellVariable(
+    variable = cell_variable.CellVariable.of(
       value=value,
       dr=geo.drho,
       left_face_grad_constraint=jnp.array(0.0),
@@ -123,7 +123,7 @@ class FVMTest(torax_refs.ReferenceValueTest):
 
     # Use ref_config to configure size, so we can also use ref_geo
     value = jnp.zeros(geo.torax_mesh.nx)
-    variable = cell_variable.CellVariable(
+    variable = cell_variable.CellVariable.of(
       value=value,
       dr=geo.drho,
       left_face_grad_constraint=jnp.array(0.0),
@@ -180,7 +180,7 @@ class FVMTest(torax_refs.ReferenceValueTest):
     # Make right cell different than left cell, so test catches bugs that
     # use the wrong end of the array
     value = value.at[-1].set(1)
-    variable = cell_variable.CellVariable(
+    variable = cell_variable.CellVariable.of(
       value=value,
       dr=geo.drho,
       left_face_grad_constraint=jnp.array(0.0),
@@ -232,13 +232,13 @@ class FVMTest(torax_refs.ReferenceValueTest):
     num_faces = num_cells + 1
     right_boundary = jnp.array((1.0, -2.0))
     dr = jnp.array(1.0)
-    x_0 = cell_variable.CellVariable(
+    x_0 = cell_variable.CellVariable.of(
         value=jnp.zeros(num_cells),
         dr=dr,
         left_face_grad_constraint=jnp.array(0.0),
         right_face_constraint=right_boundary[0],
     )
-    x_1 = cell_variable.CellVariable(
+    x_1 = cell_variable.CellVariable.of(
         value=jnp.zeros(num_cells),
         dr=dr,
         left_face_grad_constraint=jnp.array(0.0),
@@ -332,13 +332,13 @@ class FVMTest(torax_refs.ReferenceValueTest):
     # the solver.
     for start in [0, 1]:
       # Make both x_0 and x_1 start at 0
-      x_0 = cell_variable.CellVariable(
+      x_0 = cell_variable.CellVariable.of(
           value=jnp.zeros(num_cells),
           dr=dx,
           left_face_grad_constraint=jnp.array(0.0),
           right_face_constraint=right_boundary,
       )
-      x_1 = cell_variable.CellVariable(
+      x_1 = cell_variable.CellVariable.of(
           value=jnp.zeros(num_cells),
           dr=dx,
           left_face_grad_constraint=jnp.array(0.0),
@@ -628,7 +628,7 @@ class FVMTest(torax_refs.ReferenceValueTest):
         use_pereverzev=False,
     )
     initial_right_boundary = jnp.array(0.0)
-    x_0 = cell_variable.CellVariable(
+    x_0 = cell_variable.CellVariable.of(
         value=jnp.zeros(num_cells),
         dr=jnp.array(1.0),
         left_face_grad_constraint=jnp.array(0.0),
@@ -781,7 +781,7 @@ class FVMTest(torax_refs.ReferenceValueTest):
     )
 
     initial_right_boundary = jnp.array(0.0)
-    x_0 = cell_variable.CellVariable(
+    x_0 = cell_variable.CellVariable.of(
         value=jnp.zeros(num_cells),
         dr=jnp.array(1.0),
         left_face_grad_constraint=jnp.array(0.0),
