@@ -70,29 +70,9 @@ class CellVariable:
          left_face_constraint: Optional[jax.Array] = None, left_face_grad_constraint: Optional[jax.Array] = None,
          right_face_constraint: Optional[jax.Array] = None, right_face_grad_constraint: Optional[jax.Array] = None,
          ) -> CellVariable:
-    if left_face_constraint is None:
-      if left_face_grad_constraint is None:
-        raise ValueError('Exactly one of left_face_constraint or left_face_grad_constraint must be specified')
-      left_face_constraint = left_face_grad_constraint
-      left_face_constraint_is_grad = True
-    else:
-      if left_face_grad_constraint is not None:
-        raise ValueError('Exactly one of left_face_constraint or left_face_grad_constraint can be specified')
-      left_face_constraint_is_grad = False
-
-    if right_face_constraint is None:
-      if right_face_grad_constraint is None:
-        raise ValueError('Exactly one of right_face_constraint or right_face_grad_constraint must be specified')
-      right_face_constraint = right_face_grad_constraint
-      right_face_constraint_is_grad = True
-    else:
-      if right_face_grad_constraint is not None:
-        raise ValueError('Exactly one of right_face_constraint or right_face_grad_constraint can be specified')
-      right_face_constraint_is_grad = False
     return cls(value=value, dr=dr, _inner=True,
-        left_face_consx=left_face_constraint, left_face_consx_is_grad=left_face_constraint_is_grad,
-        right_face_consx=right_face_constraint, right_face_consx_is_grad=right_face_constraint_is_grad
-    )
+               left_face_constraint=left_face_constraint, left_face_grad_constraint=left_face_grad_constraint,
+               right_face_constraint=right_face_constraint, right_face_grad_constraint=right_face_grad_constraint)
 
   def project(self, weights):
     assert self.history is not None
