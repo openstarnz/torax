@@ -38,16 +38,14 @@ class CellVariable:
   Attributes:
     value: A jax.Array containing the value of this variable at each cell.
     dr: Distance between cell centers.
-    left_face_constraint: An optional jax scalar specifying the value of the
-      leftmost face. Defaults to None, signifying no constraint. The user can
-      modify this field at any time, but when face_grad is called exactly one of
-      left_face_constraint and left_face_grad_constraint must be None.
-    left_face_grad_constraint: An optional jax scalar specifying the (otherwise
-      underdetermined) value of the leftmost face. See left_face_constraint.
-    right_face_constraint: Analogous to left_face_constraint but for the right
-      face, see left_face_constraint.
-    right_face_grad_constraint: A jax scalar specifying the undetermined value
-      of the gradient on the rightmost face variable.
+    left_face_consx: An optional jax scalar specifying the value or
+      gradient of the leftmost face.
+    left_face_consx_is_grad: A boolean specifying whether the left face
+      constraint is on the gradient (Neumann if True) or the value (Dirichlet if False).
+    right_face_consx: Analogous to left_face_consx but for the right
+      face, see left_face_consx.
+    right_face_consx_is_grad: Analogous to left_face_consx_is_grad but
+      for the right face, see left_face_consx_is_grad.
     history: If not none, this CellVariable is an entry in a history, or a
       complete history, made by stacking all the leaves of a CellVariable, e.g.
       as the output of jax.lax.scan. None of the methods of the class work in
@@ -58,11 +56,10 @@ class CellVariable:
 
   value: jax.Array
   dr: jax.Array
-  _inner: bool
-  left_face_constraint: Optional[jax.Array] = None
-  right_face_constraint: Optional[jax.Array] = None
-  left_face_grad_constraint: Optional[jax.Array] = None
-  right_face_grad_constraint: Optional[jax.Array] = None
+  left_face_consx: jax.Array
+  left_face_consx_is_grad: bool
+  right_face_consx: jax.Array
+  right_face_consx_is_grad: bool
   history: Optional[bool] = None
 
   @classmethod
@@ -70,9 +67,29 @@ class CellVariable:
          left_face_constraint: Optional[jax.Array] = None, left_face_grad_constraint: Optional[jax.Array] = None,
          right_face_constraint: Optional[jax.Array] = None, right_face_grad_constraint: Optional[jax.Array] = None,
          ) -> CellVariable:
-    return cls(value=value, dr=dr, _inner=True,
-               left_face_constraint=left_face_constraint, left_face_grad_constraint=left_face_grad_constraint,
-               right_face_constraint=right_face_constraint, right_face_grad_constraint=right_face_grad_constraint)
+    if left_face_constraint is None:
+      if left_face_grad_constraint is None:
+        raise ValueError('Exactly one of left_face_constraint or left_face_grad_constraint must be specified')
+      left_face_constraint = left_face_grad_constraint
+      left_face_constraint_is_grad = True
+    else:
+      if left_face_grad_constraint is not None:
+        raise ValueError('Exactly one of left_face_constraint or left_face_grad_constraint can be specified')
+      left_face_constraint_is_grad = False
+
+    if right_face_constraint is None:
+      if right_face_grad_constraint is None:
+        raise ValueError('Exactly one of right_face_constraint or right_face_grad_constraint must be specified')
+      right_face_constraint = right_face_grad_constraint
+      right_face_constraint_is_grad = True
+    else:
+      if right_face_grad_constraint is not None:
+        raise ValueError('Exactly one of right_face_constraint or right_face_grad_constraint can be specified')
+      right_face_constraint_is_grad = False
+    return cls(value=value, dr=dr,
+        left_face_consx=left_face_constraint, left_face_consx_is_grad=left_face_constraint_is_grad,
+        right_face_consx=right_face_constraint, right_face_consx_is_grad=right_face_constraint_is_grad
+    )
 
   def project(self, weights):
     assert self.history is not None
@@ -80,19 +97,12 @@ class CellVariable:
     def project(x):
       return jnp.dot(weights, x)
 
-    def opt_project(x):
-      if x is None:
-        return None
-      return project(x)
-
     return dataclasses.replace(
         self,
         value=project(self.value),
         dr=self.dr[0],
-        left_face_constraint=opt_project(self.left_face_constraint),
-        left_face_grad_constraint=opt_project(self.left_face_grad_constraint),
-        right_face_constraint=opt_project(self.right_face_constraint),
-        right_face_grad_constraint=opt_project(self.right_face_grad_constraint),
+        left_face_consx=project(self.left_face_consx),
+        right_face_consx=project(self.right_face_consx),
         history=None,
     )
 
@@ -112,11 +122,7 @@ class CellVariable:
     """
     # Automatically check dtypes of all numeric fields
     for name, value in self.items():
-      if name == 'history':
-        # This is allowed to be a jax Array of bools that are all True, so it
-        # shouldn't go through the same check as the other variables.
-        continue
-      if isinstance(value, jax.Array):
+      if isinstance(value, jax.Array) and value.dtype != jnp.bool_:
         if value.dtype != jnp.float64 and jax.config.read('jax_enable_x64'):
           raise TypeError(
               f'Expected dtype float64, got dtype {value.dtype} for `{name}`'
@@ -283,3 +289,19 @@ class CellVariable:
 
   def __eq__(self, other):
     return self is other
+
+  @property
+  def left_face_constraint(self):
+    return None if self.left_face_consx_is_grad else self.left_face_consx
+
+  @property
+  def left_face_grad_constraint(self):
+    return self.left_face_consx if self.left_face_consx_is_grad else None
+
+  @property
+  def right_face_constraint(self):
+    return None if self.right_face_consx_is_grad else self.right_face_consx
+
+  @property
+  def right_face_grad_constraint(self):
+    return self.right_face_consx if self.right_face_consx_is_grad else None
