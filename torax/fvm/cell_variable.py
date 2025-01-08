@@ -158,8 +158,8 @@ class CellVariable:
       forward_difference = jnp.diff(self.value) / jnp.diff(x)
 
     def constrained_grad(
-        constraint: jax.Array,
-        constraint_is_grad: bool,
+        face: Optional[jax.Array],
+        grad: Optional[jax.Array],
         cell: jax.Array,
         right: bool,
     ) -> jax.Array:
@@ -175,9 +175,6 @@ class CellVariable:
       Returns:
         The gradient on this face variable.
       """
-
-      face = None if constraint_is_grad else constraint
-      grad = constraint if constraint_is_grad else None
 
       if face is not None:
         if grad is not None:
@@ -199,14 +196,14 @@ class CellVariable:
         return grad
 
     left_grad = constrained_grad(
-        self.left_face_consx,
-        self.left_face_consx_is_grad,
+        self.left_face_constraint,
+        self.left_face_grad_constraint,
         self.value[0],
         right=False,
     )
     right_grad = constrained_grad(
-        self.right_face_consx,
-        self.right_face_consx_is_grad,
+        self.right_face_constraint,
+        self.right_face_grad_constraint,
         self.value[-1],
         right=True,
     )
