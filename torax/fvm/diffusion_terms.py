@@ -67,31 +67,13 @@ def make_diffusion_terms(
       var.right_face_grad_constraint, var.right_face_constraint
   )
 
-  def left_dirichlet():
-    # Left face Dirichlet condition
-    diag_value = -2 * d_face[0] - d_face[1]
-    vec_value = 2 * d_face[0] * var.left_face_constraint / denom
-    return diag_value, vec_value
-  def left_gradient():
-    # Left face gradient condition
-    diag_value = -d_face[1]
-    vec_value = -d_face[0] * var.left_face_grad_constraint / var.dr
-    return diag_value, vec_value
-  def right_dirichlet():
-    # Right face Dirichlet condition
-    diag_value = -2 * d_face[-1] - d_face[-2]
-    vec_value = 2 * d_face[-1] * var.right_face_constraint / denom
-    return diag_value, vec_value
-  def right_gradient():
-    # Right face gradient constraint
-    diag_value = -d_face[-2]
-    vec_value = d_face[-1] * var.right_face_grad_constraint / var.dr
-    return diag_value, vec_value
-
-  diag_value, vec_value = jax_utils.py_cond(var.left_face_consx_is_grad, left_gradient, left_dirichlet)
+  # TODO: Check the signs for these formulas
+  diag_value = jax_utils.py_cond(var.left_face_consx_is_grad, -d_face[1], -2 * d_face[0] - d_face[1])
+  vec_value = jax_utils.py_cond(var.left_face_consx_is_grad, -d_face[0] * var.left_face_grad_constraint / var.dr, 2 * d_face[0] * var.left_face_constraint / denom)
   diag = diag.at[0].set(diag_value)
   vec = vec.at[0].set(vec_value)
-  diag_value, vec_value = jax_utils.py_cond(var.right_face_consx_is_grad, right_gradient, right_dirichlet)
+  diag_value = jax_utils.py_cond(var.right_face_consx_is_grad, -d_face[-2], -2 * d_face[-1] - d_face[-2])
+  vec_value = jax_utils.py_cond(var.right_face_consx_is_grad, d_face[-1] * var.right_face_grad_constraint / var.dr, 2 * d_face[-1] * var.right_face_constraint / denom)
   diag = diag.at[-1].set(diag_value)
   vec = vec.at[-1].set(vec_value)
 
