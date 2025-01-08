@@ -27,6 +27,7 @@ from typing import Optional
 import chex
 import jax
 from jax import numpy as jnp
+from torax import jax_utils
 
 
 @chex.dataclass(frozen=True)
@@ -137,17 +138,6 @@ class CellVariable:
       # assert.
       # chex.assert_rank(self.value, 1)
       chex.assert_rank(self.dr, 0)
-      num_left_constraints = (self.left_face_constraint is not None) + (
-          self.left_face_grad_constraint is not None
-      )
-      assert num_left_constraints == 1, (
-          self.left_face_constraint,
-          self.left_face_grad_constraint,
-      )
-      num_right_constraints = (self.right_face_constraint is not None) + (
-          self.right_face_grad_constraint is not None
-      )
-      assert num_right_constraints == 1
 
   def face_grad(self, x: jax.Array | None = None) -> jax.Array:
     """Returns the gradient of this value with respect to the faces.
@@ -169,8 +159,8 @@ class CellVariable:
       forward_difference = jnp.diff(self.value) / jnp.diff(x)
 
     def constrained_grad(
-        face: Optional[jax.Array],
-        grad: Optional[jax.Array],
+        constraint: jax.Array,
+        constraint_is_grad: bool,
         cell: jax.Array,
         right: bool,
     ) -> jax.Array:
@@ -187,8 +177,8 @@ class CellVariable:
         The gradient on this face variable.
       """
 
-      if face is not None:
-        if grad is not None:
+      if not constraint_is_grad:
+        if constraint_is_grad:
           raise ValueError(
               'Cannot constraint both the value and gradient of '
               'a face variable.'
@@ -200,21 +190,21 @@ class CellVariable:
             dx = x[-1] - x[-2]
           else:
             dx = x[1] - x[0]
-        return (1.0 - 2.0 * right) * (cell - face) / (0.5 * dx)
+        return (1.0 - 2.0 * right) * (cell - constraint) / (0.5 * dx)
       else:
-        if grad is None:
+        if not constraint_is_grad:
           raise ValueError('Must specify one of value or gradient.')
-        return grad
+        return constraint
 
     left_grad = constrained_grad(
-        self.left_face_constraint,
-        self.left_face_grad_constraint,
+        self.left_face_consx,
+        self.left_face_consx_is_grad,
         self.value[0],
         right=False,
     )
     right_grad = constrained_grad(
-        self.right_face_constraint,
-        self.right_face_grad_constraint,
+        self.right_face_consx,
+        self.left_face_consx_is_grad,
         self.value[-1],
         right=True,
     )
@@ -231,13 +221,13 @@ class CellVariable:
     """
     self.assert_not_history()
     inner = (self.value[..., :-1] + self.value[..., 1:]) / 2.0
-    if self.left_face_constraint is not None:
+    if not self.left_face_consx_is_grad:
       left_face = jnp.array([self.left_face_constraint])
     else:
       # When there is no constraint, leftmost face equals
       # leftmost cell
       left_face = self.value[..., 0:1]
-    if self.right_face_constraint is not None:
+    if not self.right_face_consx_is_grad:
       right_face = jnp.array([self.right_face_constraint])
     else:
       # Maintain right_face consistent with right_face_grad_constraint
@@ -292,16 +282,16 @@ class CellVariable:
 
   @property
   def left_face_constraint(self):
-    return None if self.left_face_consx_is_grad else self.left_face_consx
+    return jax_utils.error_if(self.left_face_consx, self.left_face_consx_is_grad, 'left_face_consx')
 
   @property
   def left_face_grad_constraint(self):
-    return self.left_face_consx if self.left_face_consx_is_grad else None
+    return jax_utils.error_if(self.left_face_consx, not self.left_face_consx_is_grad, 'left_face_consx')
 
   @property
   def right_face_constraint(self):
-    return None if self.right_face_consx_is_grad else self.right_face_consx
+    return jax_utils.error_if(self.right_face_consx, self.right_face_consx_is_grad, 'right_face_consx')
 
   @property
   def right_face_grad_constraint(self):
-    return self.right_face_consx if self.right_face_consx_is_grad else None
+    return jax_utils.error_if(self.right_face_consx, not self.right_face_consx_is_grad, 'right_face_consx')
