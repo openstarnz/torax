@@ -292,16 +292,16 @@ class CellVariable:
 
   @property
   def left_face_constraint(self):
-    return None if self.left_face_consx_is_grad else self.left_face_consx
+    return None if jnp.any(self.left_face_consx_is_grad) else self.left_face_consx
 
   @property
   def left_face_grad_constraint(self):
-    return self.left_face_consx if self.left_face_consx_is_grad else None
+    return self.left_face_consx if jnp.any(self.left_face_consx_is_grad) else None
 
   @property
   def right_face_constraint(self):
-    return None if self.right_face_consx_is_grad else self.right_face_consx
+    return None if jnp.any(self.right_face_consx_is_grad) else self.right_face_consx
 
   @property
   def right_face_grad_constraint(self):
-    return self.right_face_consx if self.right_face_consx_is_grad else None
+    return self.right_face_consx if jnp.any(self.right_face_consx_is_grad) else None
