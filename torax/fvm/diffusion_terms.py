@@ -59,14 +59,14 @@ def make_diffusion_terms(
   # These checks are redundant with CellVariable.__post_init__, but including
   # them here for readability because they're in important part of the logic
   # of this function.
-  # chex.assert_exactly_one_is_none(
-  #     var.left_face_grad_constraint, var.left_face_constraint
-  # )
-  # chex.assert_exactly_one_is_none(
-  #     var.right_face_grad_constraint, var.right_face_constraint
-  # )
+  chex.assert_exactly_one_is_none(
+      var.left_face_grad_constraint, var.left_face_constraint
+  )
+  chex.assert_exactly_one_is_none(
+      var.right_face_grad_constraint, var.right_face_constraint
+  )
 
-  if not var.left_face_consx_is_grad:
+  if var.left_face_constraint is not None:
     # Left face Dirichlet condition
     diag = diag.at[0].set(-2 * d_face[0] - d_face[1])
     vec = vec.at[0].set(2 * d_face[0] * var.left_face_constraint / denom)
@@ -74,7 +74,7 @@ def make_diffusion_terms(
     # Left face gradient condition
     diag = diag.at[0].set(-d_face[1])
     vec = vec.at[0].set(-d_face[0] * var.left_face_grad_constraint / var.dr)
-  if not var.right_face_consx_is_grad:
+  if var.right_face_constraint is not None:
     # Right face Dirichlet condition
     diag = diag.at[-1].set(-2 * d_face[-1] - d_face[-2])
     vec = vec.at[-1].set(2 * d_face[-1] * var.right_face_constraint / denom)

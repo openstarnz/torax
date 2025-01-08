@@ -130,15 +130,15 @@ def make_convection_terms(
   # These checks are redundant with CellVariable.__post_init__, but including
   # them here for readability because they're in important part of the logic
   # of this function.
-  # chex.assert_exactly_one_is_none(
-  #     var.left_face_grad_constraint, var.left_face_constraint
-  # )
-  #
-  # chex.assert_exactly_one_is_none(
-  #     var.right_face_grad_constraint, var.right_face_constraint
-  # )
+  chex.assert_exactly_one_is_none(
+      var.left_face_grad_constraint, var.left_face_constraint
+  )
 
-  if not var.left_face_consx_is_grad:
+  chex.assert_exactly_one_is_none(
+      var.right_face_grad_constraint, var.right_face_constraint
+  )
+
+  if var.left_face_constraint is not None:
     # Dirichlet condition at leftmost face
     if dirichlet_mode == 'ghost':
       mat_value = (
@@ -174,7 +174,7 @@ def make_convection_terms(
   mat = mat.at[0, 0].set(mat_value)
   vec = vec.at[0].set(vec_value)
 
-  if not var.right_face_consx_is_grad:
+  if var.right_face_constraint is not None:
     # Dirichlet condition at rightmost face
     if dirichlet_mode == 'ghost':
       mat_value = (
