@@ -20,6 +20,7 @@ Builds the diffusion terms of the discrete matrix equation.
 import chex
 from jax import numpy as jnp
 from torax import math_utils
+from torax import jax_utils
 from torax.fvm import cell_variable
 
 
@@ -66,22 +67,29 @@ def make_diffusion_terms(
       var.right_face_grad_constraint, var.right_face_constraint
   )
 
-  if not var.left_face_consx_is_grad:
+  def left_dirichlet(diag, vec):
     # Left face Dirichlet condition
     diag = diag.at[0].set(-2 * d_face[0] - d_face[1])
     vec = vec.at[0].set(2 * d_face[0] * var.left_face_constraint / denom)
-  else:
+    return diag, vec
+  def left_gradient(diag, vec):
     # Left face gradient condition
     diag = diag.at[0].set(-d_face[1])
     vec = vec.at[0].set(-d_face[0] * var.left_face_grad_constraint / var.dr)
-  if not var.right_face_consx_is_grad:
+    return diag, vec
+  def right_dirichlet(diag, vec):
     # Right face Dirichlet condition
     diag = diag.at[-1].set(-2 * d_face[-1] - d_face[-2])
     vec = vec.at[-1].set(2 * d_face[-1] * var.right_face_constraint / denom)
-  else:
+    return diag, vec
+  def right_gradient(diag, vec):
     # Right face gradient constraint
     diag = diag.at[-1].set(-d_face[-2])
     vec = vec.at[-1].set(d_face[-1] * var.right_face_grad_constraint / var.dr)
+    return diag, vec
+
+  diag, vec = jax_utils.py_cond(var.left_face_consx_is_grad, lambda: left_gradient(diag, vec), lambda: left_dirichlet(diag, vec))
+  diag, vec = jax_utils.py_cond(var.right_face_consx_is_grad, lambda: right_gradient(diag, vec), lambda: right_dirichlet(diag, vec))
 
   # Build the matrix
   mat = math_utils.tridiag(diag, off, off) / denom
