@@ -137,17 +137,6 @@ class CellVariable:
       # assert.
       # chex.assert_rank(self.value, 1)
       chex.assert_rank(self.dr, 0)
-      num_left_constraints = (self.left_face_constraint is not None) + (
-          self.left_face_grad_constraint is not None
-      )
-      assert num_left_constraints == 1, (
-          self.left_face_constraint,
-          self.left_face_grad_constraint,
-      )
-      num_right_constraints = (self.right_face_constraint is not None) + (
-          self.right_face_grad_constraint is not None
-      )
-      assert num_right_constraints == 1
 
   def face_grad(self, x: jax.Array | None = None) -> jax.Array:
     """Returns the gradient of this value with respect to the faces.
@@ -231,13 +220,13 @@ class CellVariable:
     """
     self.assert_not_history()
     inner = (self.value[..., :-1] + self.value[..., 1:]) / 2.0
-    if self.left_face_constraint is not None:
+    if not self.left_face_consx_is_grad:
       left_face = jnp.array([self.left_face_constraint])
     else:
       # When there is no constraint, leftmost face equals
       # leftmost cell
       left_face = self.value[..., 0:1]
-    if self.right_face_constraint is not None:
+    if not self.right_face_consx_is_grad:
       right_face = jnp.array([self.right_face_constraint])
     else:
       # Maintain right_face consistent with right_face_grad_constraint

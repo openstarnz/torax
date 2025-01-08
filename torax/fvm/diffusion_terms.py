@@ -66,7 +66,7 @@ def make_diffusion_terms(
       var.right_face_grad_constraint, var.right_face_constraint
   )
 
-  if var.left_face_constraint is not None:
+  if not var.left_face_consx_is_grad:
     # Left face Dirichlet condition
     diag = diag.at[0].set(-2 * d_face[0] - d_face[1])
     vec = vec.at[0].set(2 * d_face[0] * var.left_face_constraint / denom)
@@ -74,7 +74,7 @@ def make_diffusion_terms(
     # Left face gradient condition
     diag = diag.at[0].set(-d_face[1])
     vec = vec.at[0].set(-d_face[0] * var.left_face_grad_constraint / var.dr)
-  if var.right_face_constraint is not None:
+  if not var.right_face_consx_is_grad:
     # Right face Dirichlet condition
     diag = diag.at[-1].set(-2 * d_face[-1] - d_face[-2])
     vec = vec.at[-1].set(2 * d_face[-1] * var.right_face_constraint / denom)
