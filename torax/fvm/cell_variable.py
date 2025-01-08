@@ -27,6 +27,7 @@ from typing import Optional
 import chex
 import jax
 from jax import numpy as jnp
+from torax import jax_utils
 
 
 @chex.dataclass(frozen=True)
@@ -176,11 +177,8 @@ class CellVariable:
         The gradient on this face variable.
       """
 
-      face = None if constraint_is_grad else constraint
-      grad = constraint if constraint_is_grad else None
-
-      if face is not None:
-        if grad is not None:
+      if not constraint_is_grad:
+        if constraint_is_grad:
           raise ValueError(
               'Cannot constraint both the value and gradient of '
               'a face variable.'
@@ -192,11 +190,11 @@ class CellVariable:
             dx = x[-1] - x[-2]
           else:
             dx = x[1] - x[0]
-        return (1.0 - 2.0 * right) * (cell - face) / (0.5 * dx)
+        return (1.0 - 2.0 * right) * (cell - constraint) / (0.5 * dx)
       else:
-        if grad is None:
+        if not constraint_is_grad:
           raise ValueError('Must specify one of value or gradient.')
-        return grad
+        return constraint
 
     left_grad = constrained_grad(
         self.left_face_consx,
@@ -206,7 +204,7 @@ class CellVariable:
     )
     right_grad = constrained_grad(
         self.right_face_consx,
-        self.right_face_consx_is_grad,
+        self.left_face_consx_is_grad,
         self.value[-1],
         right=True,
     )
@@ -284,16 +282,16 @@ class CellVariable:
 
   @property
   def left_face_constraint(self):
-    return None if jnp.any(self.left_face_consx_is_grad) else self.left_face_consx
+    return jax_utils.error_if(self.left_face_consx, jnp.any(self.left_face_consx_is_grad), 'left_face_consx')
 
   @property
   def left_face_grad_constraint(self):
-    return self.left_face_consx if jnp.any(self.left_face_consx_is_grad) else None
+    return jax_utils.error_if(self.left_face_consx, jnp.logical_not(jnp.any(self.left_face_consx_is_grad)), 'left_face_consx')
 
   @property
   def right_face_constraint(self):
-    return None if jnp.any(self.right_face_consx_is_grad) else self.right_face_consx
+    return jax_utils.error_if(self.right_face_consx, jnp.any(self.right_face_consx_is_grad), 'right_face_consx')
 
   @property
   def right_face_grad_constraint(self):
-    return self.right_face_consx if jnp.any(self.right_face_consx_is_grad) else None
+    return jax_utils.error_if(self.right_face_consx, jnp.logical_not(jnp.any(self.right_face_consx_is_grad)), 'right_face_consx')
