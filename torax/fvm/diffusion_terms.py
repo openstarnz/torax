@@ -57,31 +57,27 @@ def make_diffusion_terms(
   # Boundary rows need to be special-cased.
   # TODO: Check the signs for these formulas
   # Left face
-  diag_value = jax_utils.py_cond(
+  diag.at[0].set(jax_utils.py_cond(
     var.left_face_consx_is_grad,
     lambda: -d_face[1],
     lambda: -2 * d_face[0] - d_face[1],
-  )
-  vec_value = jax_utils.py_cond(
+  ))
+  vec.at[0].set(jax_utils.py_cond(
     var.left_face_consx_is_grad,
     lambda: -d_face[0] * var.left_face_grad_constraint / var.dr,
     lambda: 2 * d_face[0] * var.left_face_constraint / denom,
-  )
-  diag = diag.at[0].set(diag_value)
-  vec = vec.at[0].set(vec_value)
+  ))
   # Right face
-  diag_value = jax_utils.py_cond(
+  diag.at[-1].set(jax_utils.py_cond(
     var.right_face_consx_is_grad,
     lambda: -d_face[-2],
     lambda: -2 * d_face[-1] - d_face[-2],
-  )
-  vec_value = jax_utils.py_cond(
+  ))
+  vec.at[-1].set(jax_utils.py_cond(
     var.right_face_consx_is_grad,
     lambda: d_face[-1] * var.right_face_grad_constraint / var.dr,
     lambda: 2 * d_face[-1] * var.right_face_constraint / denom,
-  )
-  diag = diag.at[-1].set(diag_value)
-  vec = vec.at[-1].set(vec_value)
+  ))
 
   # Build the matrix
   mat = math_utils.tridiag(diag, off, off) / denom
