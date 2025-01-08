@@ -511,12 +511,12 @@ class CoreProfileSettersTest(parameterized.TestCase):
           / dynamic_runtime_params_slice.numerics.nref
       )
       np.testing.assert_allclose(
-          boundary_conditions['ne']['right_face_constraint'],
+          boundary_conditions['ne']['right_face_consx'],
           expected_ne_bound_right * nGW,
       )
     else:
       np.testing.assert_allclose(
-          boundary_conditions['ne']['right_face_constraint'],
+          boundary_conditions['ne']['right_face_consx'],
           expected_ne_bound_right,
       )
 
@@ -597,7 +597,7 @@ class CoreProfileSettersTest(parameterized.TestCase):
     )
 
     self.assertEqual(
-        boundary_conditions['temp_el']['right_face_constraint'],
+        boundary_conditions['temp_el']['right_face_consx'],
         expected_Te_bound_right,
     )
 
@@ -633,7 +633,7 @@ class CoreProfileSettersTest(parameterized.TestCase):
     )
 
     self.assertEqual(
-        boundary_conditions['temp_ion']['right_face_constraint'],
+        boundary_conditions['temp_ion']['right_face_consx'],
         expected_Ti_bound_right,
     )
 

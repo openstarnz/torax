@@ -932,35 +932,41 @@ def compute_boundary_conditions(
 
   return {
       'temp_ion': dict(
-          left_face_grad_constraint=jnp.zeros(()),
-          right_face_grad_constraint=None,
-          right_face_constraint=jnp.array(Ti_bound_right),
+          left_face_consx=jnp.zeros(()),
+          left_face_consx_is_grad=True,
+          right_face_consx=jnp.array(Ti_bound_right),
+          right_face_consx_is_grad=False,
       ),
       'temp_el': dict(
-          left_face_grad_constraint=jnp.zeros(()),
-          right_face_grad_constraint=None,
-          right_face_constraint=jnp.array(Te_bound_right),
+          left_face_consx=jnp.zeros(()),
+          left_face_consx_is_grad=True,
+          right_face_consx=jnp.array(Te_bound_right),
+          right_face_consx_is_grad=False,
       ),
       'ne': dict(
-          left_face_grad_constraint=jnp.zeros(()),
-          right_face_grad_constraint=None,
-          right_face_constraint=jnp.array(ne_bound_right),
+          left_face_consx=jnp.zeros(()),
+          left_face_consx_is_grad=True,
+          right_face_consx=jnp.array(ne_bound_right),
+          right_face_consx_is_grad=False,
       ),
       'ni': dict(
-          left_face_grad_constraint=jnp.zeros(()),
-          right_face_grad_constraint=None,
-          right_face_constraint=jnp.array(ni_bound_right),
+          left_face_consx=jnp.zeros(()),
+          left_face_consx_is_grad=True,
+          right_face_consx=jnp.array(ni_bound_right),
+          right_face_consx_is_grad=False,
       ),
       'nimp': dict(
-          left_face_grad_constraint=jnp.zeros(()),
-          right_face_grad_constraint=None,
-          right_face_constraint=jnp.array(nimp_bound_right),
+          left_face_consx=jnp.zeros(()),
+          left_face_consx_is_grad=True,
+          right_face_consx=jnp.array(nimp_bound_right),
+          right_face_consx_is_grad=False,
       ),
       'psi': dict(
-          right_face_grad_constraint=_calculate_psi_grad_constraint(
+          right_face_consx=_calculate_psi_grad_constraint(
               dynamic_runtime_params_slice,
               geo,
           ),
+          right_face_consx_is_grad=True,
       ),
   }
 
