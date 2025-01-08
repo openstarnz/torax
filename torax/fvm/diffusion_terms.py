@@ -67,29 +67,33 @@ def make_diffusion_terms(
       var.right_face_grad_constraint, var.right_face_constraint
   )
 
-  def left_dirichlet(diag, vec):
+  def left_dirichlet():
     # Left face Dirichlet condition
-    diag = diag.at[0].set(-2 * d_face[0] - d_face[1])
-    vec = vec.at[0].set(2 * d_face[0] * var.left_face_constraint / denom)
-    return diag, vec
-  def left_gradient(diag, vec):
+    diag_value = -2 * d_face[0] - d_face[1]
+    vec_value = 2 * d_face[0] * var.left_face_constraint / denom
+    return diag_value, vec_value
+  def left_gradient():
     # Left face gradient condition
-    diag = diag.at[0].set(-d_face[1])
-    vec = vec.at[0].set(-d_face[0] * var.left_face_grad_constraint / var.dr)
-    return diag, vec
-  def right_dirichlet(diag, vec):
+    diag_value = -d_face[1]
+    vec_value = -d_face[0] * var.left_face_grad_constraint / var.dr
+    return diag_value, vec_value
+  def right_dirichlet():
     # Right face Dirichlet condition
-    diag = diag.at[-1].set(-2 * d_face[-1] - d_face[-2])
-    vec = vec.at[-1].set(2 * d_face[-1] * var.right_face_constraint / denom)
-    return diag, vec
-  def right_gradient(diag, vec):
+    diag_value = -2 * d_face[-1] - d_face[-2]
+    vec_value = 2 * d_face[-1] * var.right_face_constraint / denom
+    return diag_value, vec_value
+  def right_gradient():
     # Right face gradient constraint
-    diag = diag.at[-1].set(-d_face[-2])
-    vec = vec.at[-1].set(d_face[-1] * var.right_face_grad_constraint / var.dr)
-    return diag, vec
+    diag_value = -d_face[-2]
+    vec_value = d_face[-1] * var.right_face_grad_constraint / var.dr
+    return diag_value, vec_value
 
-  diag, vec = jax_utils.py_cond(var.left_face_consx_is_grad, lambda: left_gradient(diag, vec), lambda: left_dirichlet(diag, vec))
-  diag, vec = jax_utils.py_cond(var.right_face_consx_is_grad, lambda: right_gradient(diag, vec), lambda: right_dirichlet(diag, vec))
+  diag_value, vec_value = jax_utils.py_cond(var.left_face_consx_is_grad, left_gradient, left_dirichlet)
+  diag = diag.at[0].set(diag_value)
+  vec = vec.at[0].set(vec_value)
+  diag_value, vec_value = jax_utils.py_cond(var.right_face_consx_is_grad, right_gradient, right_dirichlet)
+  diag = diag.at[-1].set(diag_value)
+  vec = vec.at[-1].set(vec_value)
 
   # Build the matrix
   mat = math_utils.tridiag(diag, off, off) / denom
