@@ -204,7 +204,7 @@ class CellVariable:
     )
     right_grad = constrained_grad(
         self.right_face_consx,
-        self.left_face_consx_is_grad,
+        self.right_face_consx_is_grad,
         self.value[-1],
         right=True,
     )
