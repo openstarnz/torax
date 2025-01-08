@@ -21,6 +21,7 @@ import chex
 import jax
 from jax import numpy as jnp
 from torax import math_utils
+from torax import jax_utils
 from torax.fvm import cell_variable
 
 
@@ -138,7 +139,7 @@ def make_convection_terms(
       var.right_face_grad_constraint, var.right_face_constraint
   )
 
-  if var.left_face_constraint is not None:
+  def left_dirichlet():
     # Dirichlet condition at leftmost face
     if dirichlet_mode == 'ghost':
       mat_value = (
@@ -158,7 +159,8 @@ def make_convection_terms(
       print('left vec_value: ', vec_value)
     else:
       raise ValueError(dirichlet_mode)
-  else:
+    return mat_value, vec_value
+  def left_gradient():
     # Gradient boundary condition at leftmost face
     mat_value = (v_face[0] - right_alpha[0] * v_face[1]) / var.dr
     vec_value = (
@@ -170,11 +172,13 @@ def make_convection_terms(
       vec_value /= 2.0
     else:
       raise ValueError(neumann_mode)
+    return mat_value, vec_value
 
+  mat_value, vec_value = jax_utils.py_cond(var.left_face_consx_is_grad, left_gradient, left_dirichlet)
   mat = mat.at[0, 0].set(mat_value)
   vec = vec.at[0].set(vec_value)
 
-  if var.right_face_constraint is not None:
+  def right_dirichlet():
     # Dirichlet condition at rightmost face
     if dirichlet_mode == 'ghost':
       mat_value = (
@@ -198,7 +202,8 @@ def make_convection_terms(
       )
     else:
       raise ValueError(dirichlet_mode)
-  else:
+    return mat_value, vec_value
+  def right_gradient():
     # Gradient boundary condition at rightmost face
     mat_value = -(v_face[-1] - v_face[-2] * left_alpha[-1]) / var.dr
     vec_value = (
@@ -210,7 +215,9 @@ def make_convection_terms(
       vec_value /= 2.0
     else:
       raise ValueError(neumann_mode)
+    return mat_value, vec_value
 
+  mat_value, vec_value = jax_utils.py_cond(var.right_face_consx_is_grad, right_gradient, right_dirichlet)
   mat = mat.at[-1, -1].set(mat_value)
   vec = vec.at[-1].set(vec_value)
 
