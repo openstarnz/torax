@@ -39,14 +39,14 @@ class CellVariable:
   Attributes:
     value: A jax.Array containing the value of this variable at each cell.
     dr: Distance between cell centers.
-    left_face_consx: An optional jax scalar specifying the value or
+    left_face_constraint: A jax scalar specifying the value or
       gradient of the leftmost face.
-    left_face_consx_is_grad: A boolean specifying whether the left face
+    left_face_constraint_is_grad: A boolean specifying whether the left face
       constraint is on the gradient (Neumann if True) or the value (Dirichlet if False).
-    right_face_consx: Analogous to left_face_consx but for the right
-      face, see left_face_consx.
-    right_face_consx_is_grad: Analogous to left_face_consx_is_grad but
-      for the right face, see left_face_consx_is_grad.
+    right_face_constraint: Analogous to left_face_constraint but for the right
+      face, see left_face_constraint.
+    right_face_constraint_is_grad: Analogous to left_face_constraint_is_grad but
+      for the right face, see left_face_constraint_is_grad.
     history: If not none, this CellVariable is an entry in a history, or a
       complete history, made by stacking all the leaves of a CellVariable, e.g.
       as the output of jax.lax.scan. None of the methods of the class work in
@@ -57,10 +57,10 @@ class CellVariable:
 
   value: jax.Array
   dr: jax.Array
-  left_face_consx: jax.Array
-  left_face_consx_is_grad: bool
-  right_face_consx: jax.Array
-  right_face_consx_is_grad: bool
+  left_face_constraint: jax.Array
+  left_face_constraint_is_grad: bool
+  right_face_constraint: jax.Array
+  right_face_constraint_is_grad: bool
   history: Optional[bool] = None
 
   @classmethod
@@ -90,8 +90,8 @@ class CellVariable:
       right_face_constraint = right_face_value_constraint
       right_face_constraint_is_grad = False
     return cls(value=value, dr=dr,
-        left_face_consx=left_face_constraint, left_face_consx_is_grad=left_face_constraint_is_grad,
-        right_face_consx=right_face_constraint, right_face_consx_is_grad=right_face_constraint_is_grad
+        left_face_constraint=left_face_constraint, left_face_constraint_is_grad=left_face_constraint_is_grad,
+        right_face_constraint=right_face_constraint, right_face_constraint_is_grad=right_face_constraint_is_grad
     )
 
   def project(self, weights):
@@ -104,8 +104,8 @@ class CellVariable:
         self,
         value=project(self.value),
         dr=self.dr[0],
-        left_face_consx=project(self.left_face_consx),
-        right_face_consx=project(self.right_face_consx),
+        left_face_constraint=project(self.left_face_constraint),
+        right_face_constraint=project(self.right_face_constraint),
         history=None,
     )
 
@@ -190,14 +190,14 @@ class CellVariable:
       return jax.lax.cond(constraint_is_grad, lambda: constraint, lambda: unconstrained_grad)
 
     left_grad = constrained_grad(
-        self.left_face_consx,
-        self.left_face_consx_is_grad,
+        self.left_face_constraint,
+        self.left_face_constraint_is_grad,
         self.value[0],
         right=False,
     )
     right_grad = constrained_grad(
-        self.right_face_consx,
-        self.right_face_consx_is_grad,
+        self.right_face_constraint,
+        self.right_face_constraint_is_grad,
         self.value[-1],
         right=True,
     )
@@ -215,16 +215,16 @@ class CellVariable:
     self.assert_not_history()
     inner = (self.value[..., :-1] + self.value[..., 1:]) / 2.0
     left_face = jax.lax.cond(
-        self.left_face_consx_is_grad,
+        self.left_face_constraint_is_grad,
         # Maintain left_face consistent with left_face_grad_constraint
-        lambda: self.value[..., 0:1] - self.left_face_consx * self.dr / 2,
-        lambda: jnp.array([self.left_face_consx]),
+        lambda: self.value[..., 0:1] - self.left_face_constraint * self.dr / 2,
+        lambda: jnp.array([self.left_face_constraint]),
     )
     right_face = jax.lax.cond(
-        self.right_face_consx_is_grad,
+        self.right_face_constraint_is_grad,
         # Maintain right_face consistent with right_face_grad_constraint
-        lambda: self.value[..., -1:] + self.right_face_consx * self.dr / 2,
-        lambda: jnp.array([self.right_face_consx]),
+        lambda: self.value[..., -1:] + self.right_face_constraint * self.dr / 2,
+        lambda: jnp.array([self.right_face_constraint]),
     )
     return jnp.concatenate([left_face, inner, right_face], axis=-1)
 
@@ -274,16 +274,16 @@ class CellVariable:
 
   @property
   def left_face_value_constraint(self):
-    return jax_utils.error_if(self.left_face_consx, jnp.any(self.left_face_consx_is_grad), 'left_face_consx')
+    return jax_utils.error_if(self.left_face_constraint, jnp.any(self.left_face_constraint_is_grad), 'left_face_constraint')
 
   @property
   def left_face_grad_constraint(self):
-    return jax_utils.error_if(self.left_face_consx, jnp.logical_not(jnp.any(self.left_face_consx_is_grad)), 'left_face_consx')
+    return jax_utils.error_if(self.left_face_constraint, jnp.logical_not(jnp.any(self.left_face_constraint_is_grad)), 'left_face_constraint')
 
   @property
   def right_face_value_constraint(self):
-    return jax_utils.error_if(self.right_face_consx, jnp.any(self.right_face_consx_is_grad), 'right_face_consx')
+    return jax_utils.error_if(self.right_face_constraint, jnp.any(self.right_face_constraint_is_grad), 'right_face_constraint')
 
   @property
   def right_face_grad_constraint(self):
-    return jax_utils.error_if(self.right_face_consx, jnp.logical_not(jnp.any(self.right_face_consx_is_grad)), 'right_face_consx')
+    return jax_utils.error_if(self.right_face_constraint, jnp.logical_not(jnp.any(self.right_face_constraint_is_grad)), 'right_face_constraint')

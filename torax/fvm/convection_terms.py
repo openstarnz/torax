@@ -165,17 +165,17 @@ def make_convection_terms(
     return mat_value, vec_value
 
   mat_value, vec_value = jax.lax.cond(
-    var.left_face_consx_is_grad,
-    lambda: neumann_boundary(var.left_face_consx, left_alpha, right_alpha, False),
-    lambda: dirichlet_boundary(var.left_face_consx, left_alpha, right_alpha, False)
+    var.left_face_constraint_is_grad,
+    lambda: neumann_boundary(var.left_face_constraint, left_alpha, right_alpha, False),
+    lambda: dirichlet_boundary(var.left_face_constraint, left_alpha, right_alpha, False)
   )
   mat = mat.at[0, 0].set(mat_value)
   vec = vec.at[0].set(vec_value)
 
   mat_value, vec_value = jax.lax.cond(
-    var.right_face_consx_is_grad,
-    lambda: neumann_boundary(var.right_face_consx, right_alpha, left_alpha, True),
-    lambda: dirichlet_boundary(var.right_face_consx, right_alpha, left_alpha, True)
+    var.right_face_constraint_is_grad,
+    lambda: neumann_boundary(var.right_face_constraint, right_alpha, left_alpha, True),
+    lambda: dirichlet_boundary(var.right_face_constraint, right_alpha, left_alpha, True)
   )
   mat = mat.at[-1, -1].set(mat_value)
   vec = vec.at[-1].set(vec_value)

@@ -111,13 +111,13 @@ class FVMTest(torax_refs.ReferenceValueTest):
 
     # Left side, face value constraint
     left_value = dataclasses.replace(  # pytype: disable=wrong-arg-types  # dataclasses-replace-types
-        variable, left_face_consx=1.0, left_face_consx_is_grad=False,
+        variable, left_face_constraint=1.0, left_face_constraint_is_grad=False,
     )
     self.assertEqual(left_value.face_grad()[0], -1.0 / (0.5 * geo.drho))
 
     # Left side, face grad constraint
     left_grad = dataclasses.replace(  # pytype: disable=wrong-arg-types  # dataclasses-replace-types
-        variable, left_face_consx=1.0, left_face_consx_is_grad=True,
+        variable, left_face_constraint=1.0, left_face_constraint_is_grad=True,
     )
     self.assertEqual(left_grad.face_grad()[0], 1.0)
 
@@ -131,16 +131,16 @@ class FVMTest(torax_refs.ReferenceValueTest):
     # Right side, face value constraint
     right_value = dataclasses.replace(  # pytype: disable=wrong-arg-types  # dataclasses-replace-types
         variable,
-        right_face_consx=2.0,
-        right_face_consx_is_grad=False,
+        right_face_constraint=2.0,
+        right_face_constraint_is_grad=False,
     )
     self.assertEqual(right_value.face_grad()[-1], 1.0 / (0.5 * geo.drho))
 
     # Right side, face grad constraint
     right_grad = dataclasses.replace(  # pytype: disable=wrong-arg-types  # dataclasses-replace-types
         variable,
-        right_face_consx=1.0,
-        right_face_consx_is_grad=True,
+        right_face_constraint=1.0,
+        right_face_constraint_is_grad=True,
     )
     self.assertEqual(right_grad.face_grad()[-1], 1.0)
 
@@ -581,7 +581,7 @@ class FVMTest(torax_refs.ReferenceValueTest):
     # If we run with an updated boundary condition applied at time t=dt, then
     # we should get non-zero values from the implicit terms.
     final_right_boundary = jnp.array(1.0)
-    x_1 = dataclasses.replace(x_0, right_face_consx=final_right_boundary, right_face_consx_is_grad=False)
+    x_1 = dataclasses.replace(x_0, right_face_constraint=final_right_boundary, right_face_constraint_is_grad=False)
     # However, the explicit terms (when theta_imp = 0), should still be all 0.
     x_new = implicit_solve_block.implicit_solve_block(
         dt=dt,
@@ -762,7 +762,7 @@ class FVMTest(torax_refs.ReferenceValueTest):
           core_profiles_t_plus_dt=dataclasses.replace(
               core_profiles_t_plus_dt,
               temp_ion=dataclasses.replace(
-                  x_0, right_face_consx=final_right_boundary, right_face_consx_is_grad=False,
+                  x_0, right_face_constraint=final_right_boundary, right_face_constraint_is_grad=False,
               ),
           ),
           evolving_names=evolving_names,
@@ -783,7 +783,7 @@ class FVMTest(torax_refs.ReferenceValueTest):
           core_profiles_t_plus_dt=dataclasses.replace(
               core_profiles_t_plus_dt,
               temp_ion=dataclasses.replace(
-                  x_0, right_face_consx=final_right_boundary, right_face_consx_is_grad=False,
+                  x_0, right_face_constraint=final_right_boundary, right_face_constraint_is_grad=False,
               ),
           ),
           x_new_guess_vec=x_0.value,

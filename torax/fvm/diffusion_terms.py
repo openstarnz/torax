@@ -58,25 +58,25 @@ def make_diffusion_terms(
   # TODO: Check the signs for these formulas
   # Left face
   diag = diag.at[0].set(jax.lax.cond(
-    var.left_face_consx_is_grad,
+    var.left_face_constraint_is_grad,
     lambda: -d_face[1],
     lambda: -2 * d_face[0] - d_face[1],
   ))
   vec = vec.at[0].set(jax.lax.cond(
-    var.left_face_consx_is_grad,
-    lambda: -d_face[0] * var.left_face_consx / var.dr,
-    lambda: 2 * d_face[0] * var.left_face_consx / denom,
+    var.left_face_constraint_is_grad,
+    lambda: -d_face[0] * var.left_face_constraint / var.dr,
+    lambda: 2 * d_face[0] * var.left_face_constraint / denom,
   ))
   # Right face
   diag = diag.at[-1].set(jax.lax.cond(
-    var.right_face_consx_is_grad,
+    var.right_face_constraint_is_grad,
     lambda: -d_face[-2],
     lambda: -2 * d_face[-1] - d_face[-2],
   ))
   vec = vec.at[-1].set(jax.lax.cond(
-    var.right_face_consx_is_grad,
-    lambda: d_face[-1] * var.right_face_consx / var.dr,
-    lambda: 2 * d_face[-1] * var.right_face_consx / denom,
+    var.right_face_constraint_is_grad,
+    lambda: d_face[-1] * var.right_face_constraint / var.dr,
+    lambda: 2 * d_face[-1] * var.right_face_constraint / denom,
   ))
 
   # Build the matrix
