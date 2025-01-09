@@ -127,13 +127,13 @@ def make_convection_terms(
 
   # Boundary rows need to be special-cased.
 
-  def left_dirichlet(constraint, alpha, opp_alpha):
+  def left_dirichlet(constraint, alpha, opp_alpha, right):
     def lr(l, r):
-      return l
+      return r if right else l
     # Dirichlet condition at leftmost face
     if dirichlet_mode == 'ghost':
-      mat_value = (
-          v_face[lr(0, -1)] * (2.0 * alpha[0] - 1.0) - v_face[1] * opp_alpha[0]
+      mat_value = lr(1, -1) * (
+          v_face[lr(0, -1)] * (2.0 * alpha[lr(0, -1)] - 1.0) - v_face[lr(1, -2)] * opp_alpha[lr(0, -1)]
       ) / var.dr
       vec_value = (
           lr(1, -1) * 2.0 * v_face[lr(0, -1)] * (1.0 - alpha[lr(0, -1)]) * constraint
@@ -149,9 +149,9 @@ def make_convection_terms(
     else:
       raise ValueError(dirichlet_mode)
     return mat_value, vec_value
-  def left_gradient(constraint, alpha, opp_alpha):
+  def left_gradient(constraint, alpha, opp_alpha, right):
     def lr(l, r):
-      return l
+      return r if right else l
     # Gradient boundary condition at leftmost face
     mat_value = lr(1, -1) * (v_face[lr(0, -1)] - v_face[lr(1, -2)] * opp_alpha[lr(0, -1)]) / var.dr
     vec_value = (
@@ -165,17 +165,17 @@ def make_convection_terms(
       raise ValueError(neumann_mode)
     return mat_value, vec_value
 
-  mat_value, vec_value = jax_utils.py_cond(var.left_face_consx_is_grad, lambda: left_gradient(var.left_face_grad_constraint, left_alpha, right_alpha), lambda: left_dirichlet(var.left_face_constraint, left_alpha, right_alpha))
+  mat_value, vec_value = jax_utils.py_cond(var.left_face_consx_is_grad, lambda: left_gradient(var.left_face_grad_constraint, left_alpha, right_alpha, False), lambda: left_dirichlet(var.left_face_constraint, left_alpha, right_alpha, False))
   mat = mat.at[0, 0].set(mat_value)
   vec = vec.at[0].set(vec_value)
 
-  def right_dirichlet(constraint, alpha, opp_alpha):
+  def right_dirichlet(constraint, alpha, opp_alpha, right):
     def lr(l, r):
-      return r
+      return r if right else l
     # Dirichlet condition at rightmost face
     if dirichlet_mode == 'ghost':
-      mat_value = (
-          v_face[lr(0, -1)] * (1.0 - 2.0 * alpha[-1]) + v_face[-2] * opp_alpha[-1]
+      mat_value = lr(1, -1) * (
+          v_face[lr(0, -1)] * (2.0 * alpha[lr(0, -1)] - 1.0) - v_face[lr(1, -2)] * opp_alpha[lr(0, -1)]
       ) / var.dr
       vec_value = (
           lr(1, -1) * 2.0 * v_face[lr(0, -1)] * (1.0 - alpha[lr(0, -1)]) * constraint
@@ -191,9 +191,9 @@ def make_convection_terms(
     else:
       raise ValueError(dirichlet_mode)
     return mat_value, vec_value
-  def right_gradient(constraint, alpha, opp_alpha):
+  def right_gradient(constraint, alpha, opp_alpha, right):
     def lr(l, r):
-      return r
+      return r if right else l
     # Gradient boundary condition at rightmost face
     mat_value = lr(1, -1) * (v_face[lr(0, -1)] - v_face[lr(1, -2)] * opp_alpha[lr(0, -1)]) / var.dr
     vec_value = (
@@ -207,7 +207,7 @@ def make_convection_terms(
       raise ValueError(neumann_mode)
     return mat_value, vec_value
 
-  mat_value, vec_value = jax_utils.py_cond(var.right_face_consx_is_grad, lambda: right_gradient(var.right_face_grad_constraint, right_alpha, left_alpha), lambda: right_dirichlet(var.right_face_constraint, right_alpha, left_alpha))
+  mat_value, vec_value = jax_utils.py_cond(var.right_face_consx_is_grad, lambda: right_gradient(var.right_face_grad_constraint, right_alpha, left_alpha, True), lambda: right_dirichlet(var.right_face_constraint, right_alpha, left_alpha, True))
   mat = mat.at[-1, -1].set(mat_value)
   vec = vec.at[-1].set(vec_value)
 
