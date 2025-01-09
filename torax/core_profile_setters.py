@@ -228,27 +228,37 @@ def _updated_ion_density(
   Zeff_face = dynamic_runtime_params_slice.plasma_composition.Zeff_face
 
   dilution_factor = physics.get_main_ion_dilution_factor(Zi, Zimp, Zeff)
-  dilution_factor_edge = physics.get_main_ion_dilution_factor(
+  dilution_factor_inner_edge = physics.get_main_ion_dilution_factor(
+      Zi, Zimp, Zeff_face[0]
+  )
+  dilution_factor_outer_edge = physics.get_main_ion_dilution_factor(
       Zi, Zimp, Zeff_face[-1]
   )
 
-  ni = cell_variable.CellVariable.of(
+  ni = cell_variable.CellVariable(
       value=ne.value * dilution_factor,
       dr=geo.drho_norm,
-      left_face_grad_constraint=jnp.array(0.0),
-      right_face_value_constraint=jnp.array(
-          ne.right_face_value_constraint * dilution_factor_edge
+      left_face_constraint=jnp.array(
+          ne.left_face_constraint * dilution_factor_inner_edge
       ),
+      left_face_constraint_is_grad=ne.left_face_constraint_is_grad,
+      right_face_constraint=jnp.array(
+          ne.right_face_constraint * dilution_factor_outer_edge
+      ),
+      right_face_constraint_is_grad=ne.right_face_constraint_is_grad,
   )
 
-  nimp = cell_variable.CellVariable.of(
+  nimp = cell_variable.CellVariable(
       value=(ne.value - ni.value * Zi) / Zimp,
       dr=geo.drho_norm,
-      left_face_grad_constraint=jnp.array(0.0),
-      right_face_value_constraint=jnp.array(
-          ne.right_face_value_constraint - ni.right_face_value_constraint * Zi
-      )
-      / Zimp,
+      left_face_constraint=jnp.array(
+          ne.left_face_constraint - ni.left_face_constraint * Zi
+      ) / Zimp,
+      left_face_constraint_is_grad=ne.left_face_constraint_is_grad,
+      right_face_constraint=jnp.array(
+          ne.right_face_constraint - ni.right_face_constraint * Zi
+      ) / Zimp,
+      right_face_constraint_is_grad=ne.right_face_constraint_is_grad,
   )
   return ni, nimp
 
