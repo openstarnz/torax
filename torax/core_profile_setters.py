@@ -42,20 +42,26 @@ def updated_ion_temperature(
     geo: geometry.Geometry,
 ) -> cell_variable.CellVariable:
   """Updated ion temp. Used upon initialization and if temp_ion=False."""
-  # pylint: disable=invalid-name
-  Ti_bound_right = (
-      dynamic_runtime_params_slice.profile_conditions.Ti_bound_right
-  )
+  prof_conds = dynamic_runtime_params_slice.profile_conditions
 
-  Ti_bound_right = jax_utils.error_if_not_positive(
-      Ti_bound_right,
+  Ti_bound_left = jax_utils.error_if(
+      prof_conds.Ti_bound_left,
+      (~prof_conds.Ti_bound_left_is_grad) & jnp.min(prof_conds.Ti_bound_left) <= 0,
+      'Ti_bound_left',
+  )
+  Ti_bound_right = jax_utils.error_if(
+      prof_conds.Ti_bound_right,
+      (~prof_conds.Ti_bound_right_is_grad) & jnp.min(prof_conds.Ti_bound_right) <= 0,
       'Ti_bound_right',
   )
-  temp_ion = cell_variable.CellVariable.of(
+
+  temp_ion = cell_variable.CellVariable(
       value=dynamic_runtime_params_slice.profile_conditions.Ti,
-      left_face_grad_constraint=jnp.array(0.0),
-      right_face_value_constraint=Ti_bound_right,
       dr=geo.drho_norm,
+      left_face_constraint=Ti_bound_left,
+      left_face_constraint_is_grad=prof_conds.Ti_bound_left_is_grad,
+      right_face_constraint=Ti_bound_right,
+      right_face_constraint_is_grad=prof_conds.Ti_bound_right_is_grad,
   )
   # pylint: enable=invalid-name
   return temp_ion
@@ -66,20 +72,26 @@ def updated_electron_temperature(
     geo: geometry.Geometry,
 ) -> cell_variable.CellVariable:
   """Updated electron temp. Used upon initialization and if temp_el=False."""
-  # pylint: disable=invalid-name
-  Te_bound_right = (
-      dynamic_runtime_params_slice.profile_conditions.Te_bound_right
-  )
+  prof_conds = dynamic_runtime_params_slice.profile_conditions
 
-  Te_bound_right = jax_utils.error_if_not_positive(
-      Te_bound_right,
+  Te_bound_left = jax_utils.error_if(
+      prof_conds.Te_bound_left,
+      (~prof_conds.Te_bound_left_is_grad) & jnp.min(prof_conds.Te_bound_left) <= 0,
+      'Te_bound_left',
+  )
+  Te_bound_right = jax_utils.error_if(
+      prof_conds.Te_bound_right,
+      (~prof_conds.Te_bound_right_is_grad) & jnp.min(prof_conds.Te_bound_right) <= 0,
       'Te_bound_right',
   )
-  temp_el = cell_variable.CellVariable.of(
+
+  temp_el = cell_variable.CellVariable(
       value=dynamic_runtime_params_slice.profile_conditions.Te,
-      left_face_grad_constraint=jnp.array(0.0),
-      right_face_value_constraint=Te_bound_right,
       dr=geo.drho_norm,
+      left_face_constraint=Te_bound_left,
+      left_face_constraint_is_grad=prof_conds.Te_bound_left_is_grad,
+      right_face_constraint=Te_bound_right,
+      right_face_constraint_is_grad=prof_conds.Te_bound_right_is_grad,
   )
   # pylint: enable=invalid-name
   return temp_el
