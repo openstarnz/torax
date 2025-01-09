@@ -124,7 +124,7 @@ class FVMTest(torax_refs.ReferenceValueTest):
     # Check if face_value at left edge consistent with the grad constraint
     expected_edge_face_value = (
         left_grad.value[0]
-        - 0.5 * geo.drho * left_grad.left_fac_consx
+        - 0.5 * geo.drho * left_grad.left_face_grad_constraint
     )
     self.assertEqual(left_grad.face_value()[0], expected_edge_face_value)
 
