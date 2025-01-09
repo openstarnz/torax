@@ -124,21 +124,21 @@ class BoundaryConditionsTest(parameterized.TestCase):
     expected_nimp_bound_right = (
         expected_ne_bound_right - expected_ni_bound_right * Zi
     ) / Zimp
-    np.testing.assert_allclose(updated.temp_ion.right_face_constraint, 27.7)
-    np.testing.assert_allclose(updated.temp_el.right_face_constraint, 21.0)
+    np.testing.assert_allclose(updated.temp_ion.right_face_value_constraint, 27.7)
+    np.testing.assert_allclose(updated.temp_el.right_face_value_constraint, 21.0)
     np.testing.assert_allclose(
-        updated.ne.right_face_constraint,
+        updated.ne.right_face_value_constraint,
         expected_ne_bound_right,
         atol=1e-6,
         rtol=1e-6,
     )
     np.testing.assert_allclose(
-        updated.ni.right_face_constraint, expected_ni_bound_right
+        updated.ni.right_face_value_constraint, expected_ni_bound_right
     )
     np.testing.assert_allclose(
-        updated.nimp.right_face_constraint, expected_nimp_bound_right
+        updated.nimp.right_face_value_constraint, expected_nimp_bound_right
     )
-    np.testing.assert_allclose(updated.temp_el.right_face_constraint, 21.0)
+    np.testing.assert_allclose(updated.temp_el.right_face_value_constraint, 21.0)
     np.testing.assert_allclose(
         updated.psi.right_face_grad_constraint, psi_constraint
     )

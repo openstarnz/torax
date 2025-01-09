@@ -54,7 +54,7 @@ def updated_ion_temperature(
   temp_ion = cell_variable.CellVariable.of(
       value=dynamic_runtime_params_slice.profile_conditions.Ti,
       left_face_grad_constraint=jnp.array(0.0),
-      right_face_constraint=Ti_bound_right,
+      right_face_value_constraint=Ti_bound_right,
       dr=geo.drho_norm,
   )
   # pylint: enable=invalid-name
@@ -78,7 +78,7 @@ def updated_electron_temperature(
   temp_el = cell_variable.CellVariable.of(
       value=dynamic_runtime_params_slice.profile_conditions.Te,
       left_face_grad_constraint=jnp.array(0.0),
-      right_face_constraint=Te_bound_right,
+      right_face_value_constraint=Te_bound_right,
       dr=geo.drho_norm,
   )
   # pylint: enable=invalid-name
@@ -160,7 +160,7 @@ def _get_ne(
       value=ne_value,
       dr=geo.drho_norm,
       left_face_grad_constraint=jnp.array(0.0),
-      right_face_constraint=jnp.array(ne_bound_right),
+      right_face_value_constraint=jnp.array(ne_bound_right),
   )
   return ne
 
@@ -194,8 +194,8 @@ def _updated_ion_density(
       value=ne.value * dilution_factor,
       dr=geo.drho_norm,
       left_face_grad_constraint=jnp.array(0.0),
-      right_face_constraint=jnp.array(
-          ne.right_face_constraint * dilution_factor_edge
+      right_face_value_constraint=jnp.array(
+          ne.right_face_value_constraint * dilution_factor_edge
       ),
   )
 
@@ -203,8 +203,8 @@ def _updated_ion_density(
       value=(ne.value - ni.value * Zi) / Zimp,
       dr=geo.drho_norm,
       left_face_grad_constraint=jnp.array(0.0),
-      right_face_constraint=jnp.array(
-          ne.right_face_constraint - ni.right_face_constraint * Zi
+      right_face_value_constraint=jnp.array(
+          ne.right_face_value_constraint - ni.right_face_value_constraint * Zi
       )
       / Zimp,
   )
@@ -911,7 +911,7 @@ def compute_boundary_conditions(
       dynamic_runtime_params_slice,
       geo,
   )
-  ne_bound_right = ne.right_face_constraint
+  ne_bound_right = ne.right_face_value_constraint
 
   # define ion profile based on (flat) Zeff and single assumed impurity
   # with Zimp. main ion limited to hydrogenic species for now.

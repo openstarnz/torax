@@ -259,10 +259,10 @@ class StateHistory:
     xr_dict = {}
 
     xr_dict[TEMP_EL] = self.core_profiles.temp_el.value
-    xr_dict[TEMP_EL_RIGHT_BC] = self.core_profiles.temp_el.right_face_constraint
+    xr_dict[TEMP_EL_RIGHT_BC] = self.core_profiles.temp_el.right_face_value_constraint
     xr_dict[TEMP_ION] = self.core_profiles.temp_ion.value
     xr_dict[TEMP_ION_RIGHT_BC] = (
-        self.core_profiles.temp_ion.right_face_constraint
+        self.core_profiles.temp_ion.right_face_value_constraint
     )
     xr_dict[PSI] = self.core_profiles.psi.value
     xr_dict[PSI_RIGHT_GRAD_BC] = (
@@ -270,9 +270,9 @@ class StateHistory:
     )
     xr_dict[PSIDOT] = self.core_profiles.psidot.value
     xr_dict[NE] = self.core_profiles.ne.value
-    xr_dict[NE_RIGHT_BC] = self.core_profiles.ne.right_face_constraint
+    xr_dict[NE_RIGHT_BC] = self.core_profiles.ne.right_face_value_constraint
     xr_dict[NI] = self.core_profiles.ni.value
-    xr_dict[NI_RIGHT_BC] = self.core_profiles.ni.right_face_constraint
+    xr_dict[NI_RIGHT_BC] = self.core_profiles.ni.right_face_value_constraint
 
     # Currents.
     xr_dict[JTOT] = self.core_profiles.currents.jtot
