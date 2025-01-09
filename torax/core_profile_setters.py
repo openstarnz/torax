@@ -91,26 +91,28 @@ def _get_ne(
     geo: geometry.Geometry,
 ) -> cell_variable.CellVariable:
   """Helper to get the electron density profile at the current timestep."""
+  prof_conds = dynamic_runtime_params_slice.profile_conditions
+
   # pylint: disable=invalid-name
   nGW = (
-      dynamic_runtime_params_slice.profile_conditions.Ip_tot
+      prof_conds.Ip_tot
       / (jnp.pi * geo.Rmin**2)
       * 1e20
       / dynamic_runtime_params_slice.numerics.nref
   )
   ne_value = jnp.where(
-      dynamic_runtime_params_slice.profile_conditions.ne_is_fGW,
-      dynamic_runtime_params_slice.profile_conditions.ne * nGW,
-      dynamic_runtime_params_slice.profile_conditions.ne,
+      prof_conds.ne_is_fGW,
+      prof_conds.ne * nGW,
+      prof_conds.ne,
   )
   # Calculate ne_bound_right.
   ne_bound_right = jnp.where(
-      dynamic_runtime_params_slice.profile_conditions.ne_bound_right_is_fGW,
-      dynamic_runtime_params_slice.profile_conditions.ne_bound_right * nGW,
-      dynamic_runtime_params_slice.profile_conditions.ne_bound_right,
+      prof_conds.ne_bound_right_is_fGW,
+      prof_conds.ne_bound_right * nGW,
+      prof_conds.ne_bound_right,
   )
 
-  if dynamic_runtime_params_slice.profile_conditions.normalize_to_nbar:
+  if prof_conds.normalize_to_nbar:
     face_left = ne_value[0]  # Zero gradient boundary condition at left face.
     face_right = ne_bound_right
     face_inner = (ne_value[..., :-1] + ne_value[..., 1:]) / 2.0
@@ -128,12 +130,12 @@ def _get_ne(
     Rmin_out = geo.Rout_face[-1] - geo.Rout_face[0]
     # find target nbar in absolute units
     target_nbar = jnp.where(
-        dynamic_runtime_params_slice.profile_conditions.ne_is_fGW,
-        dynamic_runtime_params_slice.profile_conditions.nbar * nGW,
-        dynamic_runtime_params_slice.profile_conditions.nbar,
+        prof_conds.ne_is_fGW,
+        prof_conds.nbar * nGW,
+        prof_conds.nbar,
     )
     if (
-        not dynamic_runtime_params_slice.profile_conditions.ne_bound_right_is_absolute
+        not prof_conds.ne_bound_right_is_absolute
     ):
       # In this case, ne_bound_right is taken from ne and we also normalize it.
       C = target_nbar / (_trapz(ne_face, geo.Rout_face) / Rmin_out)
