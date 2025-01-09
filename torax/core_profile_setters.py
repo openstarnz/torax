@@ -81,16 +81,8 @@ def _updated_temperature(
     name: str,
 ) -> cell_variable.CellVariable:
   """Helper method for updated_ion_temperature and updated_electron_temperature."""
-  left_constraint = jax_utils.error_if(
-      bound_left,
-      (~bound_left_is_grad) & jnp.min(bound_left) <= 0,
-      f'{name}_bound_left',
-  )
-  right_constraint = jax_utils.error_if(
-      bound_right,
-      (~bound_right_is_grad) & jnp.min(bound_right) <= 0,
-      f'{name}_bound_right',
-  )
+  left_constraint = _ensure_value_boundary_is_positive(bound_left, bound_left_is_grad, f'{name}_bound_left')
+  right_constraint = _ensure_value_boundary_is_positive(bound_right, bound_right_is_grad, f'{name}_bound_right')
   return cell_variable.CellVariable(
       value=value,
       dr=drho_norm,
@@ -915,21 +907,29 @@ def compute_boundary_conditions(
     each CellVariable in the state. This dict can in theory recursively replace
     values in a State object.
   """
-  Ti_bound_right = jax_utils.error_if_not_positive(  # pylint: disable=invalid-name
-      dynamic_runtime_params_slice.profile_conditions.Ti_bound_right,
-      'Ti_bound_right',
+  prof_conds = dynamic_runtime_params_slice.profile_conditions
+
+  Ti_bound_right = _ensure_value_boundary_is_positive(
+      prof_conds.Ti_bound_right,
+      prof_conds.Ti_bound_right_is_grad,
+      'Ti_bound_right'
   )
 
-  Te_bound_right = jax_utils.error_if_not_positive(  # pylint: disable=invalid-name
-      dynamic_runtime_params_slice.profile_conditions.Te_bound_right,
-      'Te_bound_right',
+  Te_bound_right = _ensure_value_boundary_is_positive(
+      prof_conds.Te_bound_right,
+      prof_conds.Te_bound_right_is_grad,
+      'Te_bound_right'
   )
 
   ne = _get_ne(
       dynamic_runtime_params_slice,
       geo,
   )
-  ne_bound_right = ne.right_face_value_constraint
+  ne_bound_right = _ensure_value_boundary_is_positive(
+      prof_conds.ne_bound_right,
+      prof_conds.ne_bound_right_is_grad,
+      'ne_bound_right'
+  )
 
   # define ion profile based on (flat) Zeff and single assumed impurity
   # with Zimp. main ion limited to hydrogenic species for now.
@@ -987,6 +987,14 @@ def compute_boundary_conditions(
           right_face_constraint_is_grad=True,
       ),
   }
+
+
+def _ensure_value_boundary_is_positive(bound: jax.Array, bound_is_grad: bool, name: str) -> jax.Array:
+  return jax_utils.error_if(
+      bound,
+      jnp.min(bound) <= 0 & ~bound_is_grad,
+      name,
+  )
 
 
 # pylint: disable=invalid-name
