@@ -126,13 +126,14 @@ def make_convection_terms(
     )
 
   # Boundary rows need to be special-cased.
-  def dirichlet(constraint, alpha, opp_alpha, right):
+  def dirichlet_boundary(constraint, alpha, opp_alpha, right):
     def lr(l, r):
       return r if right else l
     # Dirichlet condition at leftmost face
     if dirichlet_mode == 'ghost':
       mat_value = lr(1, -1) * (
-          v_face[lr(0, -1)] * (2.0 * alpha[lr(0, -1)] - 1.0) - v_face[lr(1, -2)] * opp_alpha[lr(0, -1)]
+          v_face[lr(0, -1)] * (2.0 * alpha[lr(0, -1)] - 1.0)
+          - v_face[lr(1, -2)] * opp_alpha[lr(0, -1)]
       ) / var.dr
       vec_value = (
           lr(1, -1) * 2.0 * v_face[lr(0, -1)] * (1.0 - alpha[lr(0, -1)]) * constraint
@@ -148,14 +149,15 @@ def make_convection_terms(
     else:
       raise ValueError(dirichlet_mode)
     return mat_value, vec_value
-  def gradient(constraint, alpha, opp_alpha, right):
+
+  def neumann_boundary(constraint, alpha, opp_alpha, right):
     def lr(l, r):
       return r if right else l
     # Gradient boundary condition at leftmost face
-    mat_value = lr(1, -1) * (v_face[lr(0, -1)] - v_face[lr(1, -2)] * opp_alpha[lr(0, -1)]) / var.dr
-    vec_value = (
-        -v_face[lr(0, -1)] * (1.0 - alpha[lr(0, -1)]) * constraint
-    )
+    mat_value = lr(1, -1) * (
+        v_face[lr(0, -1)] - v_face[lr(1, -2)] * opp_alpha[lr(0, -1)]
+    ) / var.dr
+    vec_value = -v_face[lr(0, -1)] * (1.0 - alpha[lr(0, -1)]) * constraint
     if neumann_mode == 'ghost':
       pass  # no adjustment needed
     elif neumann_mode == 'semi-implicit':
@@ -166,16 +168,16 @@ def make_convection_terms(
 
   mat_value, vec_value = jax_utils.py_cond(
     var.left_face_consx_is_grad,
-    lambda: gradient(var.left_face_grad_constraint, left_alpha, right_alpha, False),
-    lambda: dirichlet(var.left_face_constraint, left_alpha, right_alpha, False)
+    lambda: neumann_boundary(var.left_face_grad_constraint, left_alpha, right_alpha, False),
+    lambda: dirichlet_boundary(var.left_face_constraint, left_alpha, right_alpha, False)
   )
   mat = mat.at[0, 0].set(mat_value)
   vec = vec.at[0].set(vec_value)
 
   mat_value, vec_value = jax_utils.py_cond(
     var.right_face_consx_is_grad,
-    lambda: gradient(var.right_face_grad_constraint, right_alpha, left_alpha, True),
-    lambda: dirichlet(var.right_face_constraint, right_alpha, left_alpha, True)
+    lambda: neumann_boundary(var.right_face_grad_constraint, right_alpha, left_alpha, True),
+    lambda: dirichlet_boundary(var.right_face_constraint, right_alpha, left_alpha, True)
   )
   mat = mat.at[-1, -1].set(mat_value)
   vec = vec.at[-1].set(vec_value)
