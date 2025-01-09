@@ -204,8 +204,9 @@ InterpolatedVarTimeRhoInput = (
 )
 
 
-def rhonorm1_defined_in_timerhoinput(
+def rhonorm_defined_in_timerhoinput(
     values: InterpolatedVarTimeRhoInput,
+    target_rhonorm: float,
 ) -> bool:
   """Checks if the boundary condition at rho=1.0 is always defined."""
   match values:
@@ -218,15 +219,15 @@ def rhonorm1_defined_in_timerhoinput(
     case dict():
       # Initial condition dict shortcut.
       if all(isinstance(v, float) for v in values.values()):
-        if 1.0 not in values:
+        if target_rhonorm not in values:
           return False
       else:
         # Check for all times that the boundary condition is defined.
         for _, value in values.items():
-          if 1.0 not in value:
+          if target_rhonorm not in value:
             return False
     case xr.DataArray():
-      if 1.0 not in values.coords[RHO_NORM]:
+      if target_rhonorm not in values.coords[RHO_NORM]:
         return False
     # Arrays case.
     case _:
@@ -241,7 +242,7 @@ def rhonorm1_defined_in_timerhoinput(
       else:
         # pytype: enable=bad-unpacking
         raise ValueError('Only array tuples of length 2 or 3 are supported.')
-      if 1.0 not in rho_norm:
+      if target_rhonorm not in rho_norm:
         return False
   return True
 
