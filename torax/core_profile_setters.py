@@ -925,11 +925,7 @@ def compute_boundary_conditions(
       dynamic_runtime_params_slice,
       geo,
   )
-  ne_bound_right = _ensure_value_boundary_is_positive(
-      prof_conds.ne_bound_right,
-      prof_conds.ne_bound_right_is_grad,
-      'ne_bound_right'
-  )
+  ne_bound_right = ne.right_face_value_constraint
 
   # define ion profile based on (flat) Zeff and single assumed impurity
   # with Zimp. main ion limited to hydrogenic species for now.
