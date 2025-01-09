@@ -944,33 +944,39 @@ def compute_boundary_conditions(
       - ni_bound_right * dynamic_runtime_params_slice.plasma_composition.Zi
   ) / dynamic_runtime_params_slice.plasma_composition.Zimp
 
+  Ti_bound_left = jnp.array(0.0)
+  Te_bound_left = jnp.array(0.0)
+  ne_bound_left = jnp.array(0.0)
+  ni_bound_left = jnp.array(0.0)
+  nimp_bound_left = jnp.array(0.0)
+
   return {
       'temp_ion': dict(
-          left_face_constraint=jnp.zeros(()),
-          left_face_constraint_is_grad=True,
+          left_face_constraint=jnp.array(Ti_bound_left),
+          left_face_constraint_is_grad=prof_conds.Ti_bound_left_is_grad,
           right_face_constraint=jnp.array(Ti_bound_right),
-          right_face_constraint_is_grad=False,
+          right_face_constraint_is_grad=prof_conds.Ti_bound_right_is_grad,
       ),
       'temp_el': dict(
-          left_face_constraint=jnp.zeros(()),
-          left_face_constraint_is_grad=True,
+          left_face_constraint=jnp.array(Te_bound_left),
+          left_face_constraint_is_grad=prof_conds.Te_bound_left_is_grad,
           right_face_constraint=jnp.array(Te_bound_right),
-          right_face_constraint_is_grad=False,
+          right_face_constraint_is_grad=prof_conds.Te_bound_right_is_grad,
       ),
       'ne': dict(
-          left_face_constraint=jnp.zeros(()),
-          left_face_constraint_is_grad=True,
+          left_face_constraint=jnp.array(ne_bound_left),
+          left_face_constraint_is_grad=prof_conds.ne_bound_left_is_grad,
           right_face_constraint=jnp.array(ne_bound_right),
-          right_face_constraint_is_grad=False,
+          right_face_constraint_is_grad=prof_conds.ne_bound_right_is_grad,
       ),
       'ni': dict(
-          left_face_constraint=jnp.zeros(()),
+          left_face_constraint=jnp.array(ni_bound_left),
           left_face_constraint_is_grad=True,
           right_face_constraint=jnp.array(ni_bound_right),
           right_face_constraint_is_grad=False,
       ),
       'nimp': dict(
-          left_face_constraint=jnp.zeros(()),
+          left_face_constraint=jnp.array(nimp_bound_left),
           left_face_constraint_is_grad=True,
           right_face_constraint=jnp.array(nimp_bound_right),
           right_face_constraint_is_grad=False,
