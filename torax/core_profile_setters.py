@@ -178,16 +178,23 @@ def _get_ne(
 
   # TODO: Add tests to check that the left and right boundaries are correct in the new cases.
 
-  # Verify that the line integrated value is correct
-  face_left = jnp.where(prof_conds.ne_bound_left_is_grad, ne_value[0], ne_bound_left)
-  face_right = jnp.where(prof_conds.ne_bound_right_is_grad, ne_value[-1], ne_bound_right)
-  face_inner = (ne_value[..., :-1] + ne_value[..., 1:]) / 2.0
-  ne_face = jnp.concatenate(
-      [face_left[None], face_inner, face_right[None]],
-  )
-  actual_nbar = _trapz(ne_face, geo.Rout_face) / Rmin_out
-  diff = actual_nbar - target_nbar
-  ne_value = jax_utils.error_if(ne_value, diff > 1e-6, 'nbar mismatch')
+  if prof_conds.normalize_to_nbar:
+    # Verify that the line integrated value is correct
+    face_left = jnp.where(prof_conds.ne_bound_left_is_grad, ne_value[0], ne_bound_left)
+    face_right = jnp.where(prof_conds.ne_bound_right_is_grad, ne_value[-1], ne_bound_right)
+    face_inner = (ne_value[..., :-1] + ne_value[..., 1:]) / 2.0
+    ne_face = jnp.concatenate(
+        [face_left[None], face_inner, face_right[None]],
+    )
+    Rmin_out = geo.Rout_face[-1] - geo.Rout_face[0]
+    actual_nbar = _trapz(ne_face, geo.Rout_face) / Rmin_out
+    target_nbar = jnp.where(
+      prof_conds.ne_is_fGW,
+      prof_conds.nbar * nGW,
+      prof_conds.nbar,
+    )
+    diff = actual_nbar - target_nbar
+    ne_value = jax_utils.error_if(ne_value, diff > 1e-6, 'nbar mismatch')
 
   ne = cell_variable.CellVariable(
       value=ne_value,
