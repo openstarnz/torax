@@ -177,24 +177,15 @@ class CellVariable:
         The gradient on this face variable.
       """
 
-      if not constraint_is_grad:
-        if constraint_is_grad:
-          raise ValueError(
-              'Cannot constraint both the value and gradient of '
-              'a face variable.'
-          )
-        if x is None:
-          dx = self.dr
-        else:
-          if right:
-            dx = x[-1] - x[-2]
-          else:
-            dx = x[1] - x[0]
-        return (1.0 - 2.0 * right) * (cell - constraint) / (0.5 * dx)
+      if x is None:
+        dx = self.dr
       else:
-        if not constraint_is_grad:
-          raise ValueError('Must specify one of value or gradient.')
-        return constraint
+        if right:
+          dx = x[-1] - x[-2]
+        else:
+          dx = x[1] - x[0]
+      unconstrained_grad = (1.0 - 2.0 * right) * (cell - constraint) / (0.5 * dx)
+      return jax.lax.cond(constraint_is_grad, lambda: constraint, lambda: unconstrained_grad)
 
     left_grad = constrained_grad(
         self.left_face_consx,
@@ -221,19 +212,18 @@ class CellVariable:
     """
     self.assert_not_history()
     inner = (self.value[..., :-1] + self.value[..., 1:]) / 2.0
-    if not self.left_face_consx_is_grad:
-      left_face = jnp.array([self.left_face_constraint])
-    else:
-      # When there is no constraint, leftmost face equals
-      # leftmost cell
-      left_face = self.value[..., 0:1]
-    if not self.right_face_consx_is_grad:
-      right_face = jnp.array([self.right_face_constraint])
-    else:
-      # Maintain right_face consistent with right_face_grad_constraint
-      right_face = (
-          self.value[..., -1:] + self.right_face_grad_constraint * self.dr / 2
-      )
+    left_face = jax_utils.py_cond(
+        self.left_face_consx_is_grad,
+        # Maintain left_face consistent with left_face_grad_constraint
+        lambda: self.value[..., 0:1] - self.left_face_grad_constraint * self.dr / 2,
+        lambda: jnp.array([self.left_face_constraint]),
+    )
+    right_face = jax_utils.py_cond(
+        self.right_face_consx_is_grad,
+        # Maintain right_face consistent with right_face_grad_constraint
+        lambda: self.value[..., -1:] + self.right_face_grad_constraint * self.dr / 2,
+        lambda: jnp.array([self.right_face_constraint]),
+    )
     return jnp.concatenate([left_face, inner, right_face], axis=-1)
 
   def grad(self) -> jax.Array:
