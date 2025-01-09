@@ -65,14 +65,6 @@ class FVMTest(torax_refs.ReferenceValueTest):
     np.testing.assert_allclose(face_grad_jax, references.psi_face_grad)
 
   @parameterized.parameters([
-      dict(references_getter=torax_refs.circular_references),
-      dict(references_getter=torax_refs.chease_references_Ip_from_chease),
-      dict(
-          references_getter=torax_refs.chease_references_Ip_from_runtime_params
-      ),
-  ])
-
-  @parameterized.parameters([
       dict(
           seed=20221114,
           references_getter=torax_refs.circular_references,
