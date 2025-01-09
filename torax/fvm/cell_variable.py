@@ -65,27 +65,29 @@ class CellVariable:
 
   @classmethod
   def of(cls, value: jax.Array, dr: jax.Array,
-         left_face_constraint: Optional[jax.Array] = None, left_face_grad_constraint: Optional[jax.Array] = None,
-         right_face_constraint: Optional[jax.Array] = None, right_face_grad_constraint: Optional[jax.Array] = None,
+         left_face_value_constraint: Optional[jax.Array] = None, left_face_grad_constraint: Optional[jax.Array] = None,
+         right_face_value_constraint: Optional[jax.Array] = None, right_face_grad_constraint: Optional[jax.Array] = None,
          ) -> CellVariable:
-    if left_face_constraint is None:
+    if left_face_value_constraint is None:
       if left_face_grad_constraint is None:
-        raise ValueError('Exactly one of left_face_constraint or left_face_grad_constraint must be specified')
+        raise ValueError('Exactly one of left_face_value_constraint or left_face_grad_constraint must be specified')
       left_face_constraint = left_face_grad_constraint
       left_face_constraint_is_grad = True
     else:
       if left_face_grad_constraint is not None:
-        raise ValueError('Exactly one of left_face_constraint or left_face_grad_constraint can be specified')
+        raise ValueError('Exactly one of left_face_value_constraint or left_face_grad_constraint can be specified')
+      left_face_constraint = left_face_value_constraint
       left_face_constraint_is_grad = False
 
-    if right_face_constraint is None:
+    if right_face_value_constraint is None:
       if right_face_grad_constraint is None:
-        raise ValueError('Exactly one of right_face_constraint or right_face_grad_constraint must be specified')
+        raise ValueError('Exactly one of right_face_value_constraint or right_face_grad_constraint must be specified')
       right_face_constraint = right_face_grad_constraint
       right_face_constraint_is_grad = True
     else:
       if right_face_grad_constraint is not None:
-        raise ValueError('Exactly one of right_face_constraint or right_face_grad_constraint can be specified')
+        raise ValueError('Exactly one of right_face_value_constraint or right_face_grad_constraint can be specified')
+      right_face_constraint = right_face_value_constraint
       right_face_constraint_is_grad = False
     return cls(value=value, dr=dr,
         left_face_consx=left_face_constraint, left_face_consx_is_grad=left_face_constraint_is_grad,
@@ -271,7 +273,7 @@ class CellVariable:
     return self is other
 
   @property
-  def left_face_constraint(self):
+  def left_face_value_constraint(self):
     return jax_utils.error_if(self.left_face_consx, jnp.any(self.left_face_consx_is_grad), 'left_face_consx')
 
   @property
@@ -279,7 +281,7 @@ class CellVariable:
     return jax_utils.error_if(self.left_face_consx, jnp.logical_not(jnp.any(self.left_face_consx_is_grad)), 'left_face_consx')
 
   @property
-  def right_face_constraint(self):
+  def right_face_value_constraint(self):
     return jax_utils.error_if(self.right_face_consx, jnp.any(self.right_face_consx_is_grad), 'right_face_consx')
 
   @property
