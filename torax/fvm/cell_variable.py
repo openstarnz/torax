@@ -212,17 +212,17 @@ class CellVariable:
     """
     self.assert_not_history()
     inner = (self.value[..., :-1] + self.value[..., 1:]) / 2.0
-    left_face = jax_utils.py_cond(
+    left_face = jax.lax.cond(
         self.left_face_consx_is_grad,
         # Maintain left_face consistent with left_face_grad_constraint
-        lambda: self.value[..., 0:1] - self.left_face_grad_constraint * self.dr / 2,
-        lambda: jnp.array([self.left_face_constraint]),
+        lambda: self.value[..., 0:1] - self.left_face_consx * self.dr / 2,
+        lambda: jnp.array([self.left_face_consx]),
     )
-    right_face = jax_utils.py_cond(
+    right_face = jax.lax.cond(
         self.right_face_consx_is_grad,
         # Maintain right_face consistent with right_face_grad_constraint
-        lambda: self.value[..., -1:] + self.right_face_grad_constraint * self.dr / 2,
-        lambda: jnp.array([self.right_face_constraint]),
+        lambda: self.value[..., -1:] + self.right_face_consx * self.dr / 2,
+        lambda: jnp.array([self.right_face_consx]),
     )
     return jnp.concatenate([left_face, inner, right_face], axis=-1)
 
