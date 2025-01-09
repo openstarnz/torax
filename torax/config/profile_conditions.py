@@ -244,12 +244,12 @@ class DynamicProfileConditions:
 
   Ip_tot: array_typing.ScalarFloat
   # Temperature profiles defined on the cell grid.
-  Te: array_typing.ArrayFloat
+  Ti: array_typing.ArrayFloat
   Ti_bound_left: array_typing.ScalarFloat
   Ti_bound_left_is_grad: bool
   Ti_bound_right: array_typing.ScalarFloat
   Ti_bound_right_is_grad: bool
-  Ti: array_typing.ArrayFloat
+  Te: array_typing.ArrayFloat
   Te_bound_left: array_typing.ScalarFloat
   Te_bound_left_is_grad: bool
   Te_bound_right: array_typing.ScalarFloat
