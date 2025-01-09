@@ -992,7 +992,7 @@ def compute_boundary_conditions(
 def _ensure_value_boundary_is_positive(bound: jax.Array, bound_is_grad: bool, name: str) -> jax.Array:
   return jax_utils.error_if(
       bound,
-      jnp.min(bound) <= 0 & ~bound_is_grad,
+      (jnp.min(bound) <= 0) & (~bound_is_grad),
       name,
   )
 
