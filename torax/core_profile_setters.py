@@ -113,7 +113,11 @@ def _get_ne(
       prof_conds.ne * nGW,
       prof_conds.ne,
   )
-  # Calculate ne_bound_right.
+  ne_bound_left = jnp.where(
+      prof_conds.ne_bound_left_is_fGW,
+      prof_conds.ne_bound_left * nGW,
+      prof_conds.ne_bound_left,
+  )
   ne_bound_right = jnp.where(
       prof_conds.ne_bound_right_is_fGW,
       prof_conds.ne_bound_right * nGW,
@@ -121,8 +125,8 @@ def _get_ne(
   )
 
   if prof_conds.normalize_to_nbar:
-    face_left = ne_value[0]  # Zero gradient boundary condition at left face.
-    face_right = ne_bound_right
+    face_left = jnp.where(prof_conds.ne_bound_left_is_grad, ne_value[0], ne_bound_left)
+    face_right = jnp.where(prof_conds.ne_bound_right_is_grad, ne_value[-1], ne_bound_right)
     face_inner = (ne_value[..., :-1] + ne_value[..., 1:]) / 2.0
     ne_face = jnp.concatenate(
         [face_left[None], face_inner, face_right[None]],
@@ -142,35 +146,56 @@ def _get_ne(
         prof_conds.nbar * nGW,
         prof_conds.nbar,
     )
-    if (
-        not prof_conds.ne_bound_right_is_absolute
-    ):
-      # In this case, ne_bound_right is taken from ne and we also normalize it.
-      C = target_nbar / (_trapz(ne_face, geo.Rout_face) / Rmin_out)
-      # pylint: enable=invalid-name
-      ne_bound_right = C * ne_bound_right
-    else:
-      # If ne_bound_right is absolute, subtract off contribution from outer
-      # face to get C we need to multiply the inner values with.
-      nbar_from_ne_face_inner = (
-          _trapz(ne_face[:-1], geo.Rout_face[:-1]) / Rmin_out
-      )
+    left_is_absolute = prof_conds.ne_bound_left_is_absolute
+    right_is_absolute = prof_conds.ne_bound_right_is_absolute
 
-      dr_edge = geo.Rout_face[-1] - geo.Rout_face[-2]
+    start_idx = 1 if left_is_absolute else 0
+    end_idx = -1 if right_is_absolute else None
 
-      C = (target_nbar - 0.5 * ne_face[-1] * dr_edge / Rmin_out) / (
-          nbar_from_ne_face_inner + 0.5 * ne_face[-2] * dr_edge / Rmin_out
-      )
+    inner_nbar = _trapz(ne_face[start_idx:end_idx], geo.Rout_face[start_idx:end_idx]) / Rmin_out
+
+    numerator_change = 0
+    denominator_change = 0
+
+    if left_is_absolute:
+        numerator_change += ne_face[0] * (geo.Rout_face[1] - geo.Rout_face[0])
+        denominator_change += ne_face[1] * (geo.Rout_face[1] - geo.Rout_face[0])
+    if right_is_absolute:
+        numerator_change += ne_face[-1] * (geo.Rout_face[-1] - geo.Rout_face[-2])
+        denominator_change += ne_face[-2] * (geo.Rout_face[-1] - geo.Rout_face[-2])
+
+    C = ((target_nbar - 0.5 * numerator_change / Rmin_out) /
+         (inner_nbar + 0.5 * denominator_change / Rmin_out))
+
+    if not left_is_absolute:
+        ne_bound_left *= C
+    if not right_is_absolute:
+        ne_bound_right *= C
   else:
     C = 1
 
   ne_value = C * ne_value
 
-  ne = cell_variable.CellVariable.of(
+  # TODO: Add tests to check that the left and right boundaries are correct in the new cases.
+
+  # Verify that the line integrated value is correct
+  face_left = jnp.where(prof_conds.ne_bound_left_is_grad, ne_value[0], ne_bound_left)
+  face_right = jnp.where(prof_conds.ne_bound_right_is_grad, ne_value[-1], ne_bound_right)
+  face_inner = (ne_value[..., :-1] + ne_value[..., 1:]) / 2.0
+  ne_face = jnp.concatenate(
+      [face_left[None], face_inner, face_right[None]],
+  )
+  actual_nbar = _trapz(ne_face, geo.Rout_face) / Rmin_out
+  diff = actual_nbar - target_nbar
+  ne_value = jax_utils.error_if(ne_value, diff > 1e-6, 'nbar mismatch')
+
+  ne = cell_variable.CellVariable(
       value=ne_value,
       dr=geo.drho_norm,
-      left_face_grad_constraint=jnp.array(0.0),
-      right_face_value_constraint=jnp.array(ne_bound_right),
+      left_face_constraint=ne_bound_left,
+      left_face_constraint_is_grad=prof_conds.ne_bound_left_is_grad,
+      right_face_constraint=ne_bound_right,
+      right_face_constraint_is_grad=prof_conds.ne_bound_right_is_grad,
   )
   return ne
 
