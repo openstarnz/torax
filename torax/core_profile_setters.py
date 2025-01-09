@@ -951,12 +951,22 @@ def compute_boundary_conditions(
   """
   prof_conds = dynamic_runtime_params_slice.profile_conditions
 
+  Ti_bound_left = _ensure_value_boundary_is_positive(
+      prof_conds.Ti_bound_left,
+      prof_conds.Ti_bound_left_is_grad,
+      'Ti_bound_left',
+  )
   Ti_bound_right = _ensure_value_boundary_is_positive(
       prof_conds.Ti_bound_right,
       prof_conds.Ti_bound_right_is_grad,
       'Ti_bound_right'
   )
 
+  Te_bound_left = _ensure_value_boundary_is_positive(
+      prof_conds.Te_bound_left,
+      prof_conds.Te_bound_left_is_grad,
+      'Te_bound_left',
+  )
   Te_bound_right = _ensure_value_boundary_is_positive(
       prof_conds.Te_bound_right,
       prof_conds.Te_bound_right_is_grad,
@@ -986,8 +996,6 @@ def compute_boundary_conditions(
       - ni_bound_right * dynamic_runtime_params_slice.plasma_composition.Zi
   ) / dynamic_runtime_params_slice.plasma_composition.Zimp
 
-  Ti_bound_left = jnp.array(0.0)
-  Te_bound_left = jnp.array(0.0)
   ne_bound_left = jnp.array(0.0)
   ni_bound_left = jnp.array(0.0)
   nimp_bound_left = jnp.array(0.0)
