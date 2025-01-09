@@ -405,7 +405,28 @@ electron temperature.
 ``Teped`` (float = 5.0) **time-varying-scalar**
   Electron temperature at the pedestal top in units of keV.
 
-``rho_norm_ped`` (float = 0.91) **time-varying-scalar**
+``rho_norm_ped_top`` (float = 0.91) **time-varying-scalar**
+  Location of pedestal top, in units of :math:`\hat{\rho}`.
+
+set_pped_tpedratio_nped
+^^^^^^^^^^^^^^^^^^^^^^^
+Set the pedestal width, electron density and ion temperature by providing the
+total pressure at the pedestal and the ratio of ion to electron temperature.
+
+``Pped`` (float = 10.0) **time-varying-scalar**
+  The plasma pressure at the pedestal in units of :math:`[Pa]`.
+
+``neped`` (float = 0.7) **time-varying-scalar**
+  Electron density at the pedestal top.
+  In units of reference density if ``neped_is_fGW==False``. In units of Greenwald fraction if ``neped_is_fGW==True``.
+
+``neped_is_fGW`` (bool = False) **time-varying-scalar**
+  Toggles units of ``neped``.
+
+``ion_electron_temperature_ratio`` **time-varying-scalar**
+  Ratio of the ion and electron temperature at the pedestal.
+
+``rho_norm_ped_top`` (float = 0.91) **time-varying-scalar**
   Location of pedestal top, in units of :math:`\hat{\rho}`.
 
 geometry
@@ -910,7 +931,7 @@ Time dependent Gaussian pellet source. No first-principle-based model is yet imp
   Total particle source in units of particles/s
 
 generic_particle_source
-^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^
 
 Time dependent Gaussian particle source. No first-principle-based model is yet implemented in TORAX.
 
@@ -966,6 +987,26 @@ Bremsstrahlung model from Wesson, with an optional correction for relativistic e
 ``mode`` (str = 'model')
 
 ``use_relativistic_correction`` (bool = False)
+
+cyclotron_radiation_heat_sink
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Cyclotron radiation model from Albajar NF 2001 with a deposition profile from Artaud NF 2018.
+
+``mode`` (str = 'model')
+
+``wall_reflection_coeff`` (float = 0.9)
+  Machine-dependent dimensionless parameter corresponding to the fraction of
+  cyclotron radiation reflected off the wall and reabsorbed by the plasma.
+
+``beta_min`` (float = 0.5)
+
+``beta_max`` (float = 8.0)
+
+``beta_grid_size`` (int = 32)
+  beta in this context is a variable in the temperature profile parameterization used
+  in the Albajar model. The parameter is fit with simple grid search performed over
+  the range ``[beta_min, beta_max]``, with ``beta_grid_size`` uniformly spaced steps.
 
 electron_cyclotron_source
 ^^^^^^^^^^^^^^^^^^^^^^^^^

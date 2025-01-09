@@ -41,6 +41,7 @@ from typing_extensions import override
 
 # Internal import.
 
+
 # Environment variable for the TORIC NN model. Used if the model path
 # is not set in the config.
 _MODEL_PATH_ENV_VAR: Final[str] = 'TORIC_NN_MODEL_PATH'
