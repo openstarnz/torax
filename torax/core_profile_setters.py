@@ -644,6 +644,7 @@ def _init_psi_and_current(
   Returns:
     Refined core profiles.
   """
+  # TODO: Calculate psi on the inner and outer sides.
   # Retrieving psi from the profile conditions.
   if dynamic_runtime_params_slice.profile_conditions.psi is not None:
     psi = cell_variable.CellVariable.of(
