@@ -950,6 +950,7 @@ def compute_boundary_conditions(
     values in a State object.
   """
   prof_conds = dynamic_runtime_params_slice.profile_conditions
+  plas_comp = dynamic_runtime_params_slice.plasma_composition
 
   Ti_bound_left = _ensure_value_boundary_is_positive(
       prof_conds.Ti_bound_left,
@@ -977,28 +978,34 @@ def compute_boundary_conditions(
       dynamic_runtime_params_slice,
       geo,
   )
-  ne_bound_right = ne.right_face_value_constraint
+  ne_bound_left = ne.left_face_constraint
+  ne_bound_right = ne.right_face_constraint
 
   # define ion profile based on (flat) Zeff and single assumed impurity
   # with Zimp. main ion limited to hydrogenic species for now.
   # Assume isotopic balance for DT fusion power. Solve for ni based on:
   # Zeff = (Zi * ni + Zimp**2 * nimp)/ne  ;  nimp*Zimp + ni*Zi = ne
-
-  dilution_factor_edge = physics.get_main_ion_dilution_factor(
-      dynamic_runtime_params_slice.plasma_composition.Zi,
-      dynamic_runtime_params_slice.plasma_composition.Zimp,
-      dynamic_runtime_params_slice.plasma_composition.Zeff_face[-1],
+  # This assumes that Zeff varies slowly across rho_norm, so that the
+  # gradient of ni and nimp are simply proportional to the gradient of ne.
+  dilution_factor_inner_edge = physics.get_main_ion_dilution_factor(
+      plas_comp.Zi,
+      plas_comp.Zimp,
+      plas_comp.Zeff_face[0],
   )
+  ni_bound_left = ne_bound_left * dilution_factor_inner_edge
+  nimp_bound_left = (
+      ne_bound_left - ni_bound_left * plas_comp.Zi
+  ) / plas_comp.Zimp
 
-  ni_bound_right = ne_bound_right * dilution_factor_edge
+  dilution_factor_outer_edge = physics.get_main_ion_dilution_factor(
+      plas_comp.Zi,
+      plas_comp.Zimp,
+      plas_comp.Zeff_face[-1],
+  )
+  ni_bound_right = ne_bound_right * dilution_factor_outer_edge
   nimp_bound_right = (
-      ne_bound_right
-      - ni_bound_right * dynamic_runtime_params_slice.plasma_composition.Zi
-  ) / dynamic_runtime_params_slice.plasma_composition.Zimp
-
-  ne_bound_left = jnp.array(0.0)
-  ni_bound_left = jnp.array(0.0)
-  nimp_bound_left = jnp.array(0.0)
+       ne_bound_right - ni_bound_right * plas_comp.Zi
+  ) / plas_comp.Zimp
 
   return {
       'temp_ion': dict(
@@ -1021,15 +1028,15 @@ def compute_boundary_conditions(
       ),
       'ni': dict(
           left_face_constraint=jnp.array(ni_bound_left),
-          left_face_constraint_is_grad=True,
+          left_face_constraint_is_grad=prof_conds.ne_bound_left_is_grad,
           right_face_constraint=jnp.array(ni_bound_right),
-          right_face_constraint_is_grad=False,
+          right_face_constraint_is_grad=prof_conds.ne_bound_right_is_grad,
       ),
       'nimp': dict(
           left_face_constraint=jnp.array(nimp_bound_left),
-          left_face_constraint_is_grad=True,
+          left_face_constraint_is_grad=prof_conds.ne_bound_left_is_grad,
           right_face_constraint=jnp.array(nimp_bound_right),
-          right_face_constraint_is_grad=False,
+          right_face_constraint_is_grad=prof_conds.ne_bound_right_is_grad,
       ),
       'psi': dict(
           right_face_constraint=_calculate_psi_grad_constraint(
