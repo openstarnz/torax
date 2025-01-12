@@ -244,8 +244,8 @@ def calc_jtot_from_psi(
   Ip_profile_face = (
       psi.face_grad()
       * geo.g2g3_over_rhon_face
-      * geo.F_face
-      / geo.Phib
+      * (geo.G_face * geo.Rmaj)
+      / (jnp.pi * geo.rho_b**2)
       / (16 * jnp.pi**3 * constants.CONSTANTS.mu0)
   )
 

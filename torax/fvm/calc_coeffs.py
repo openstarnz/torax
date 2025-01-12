@@ -481,8 +481,8 @@ def _calc_coeffs_full(
       * consts.mu0
       * 16
       * jnp.pi**2
-      * geo.Phib**2
-      / geo.F**2
+      * (jnp.pi * geo.rho_b**2)**2
+      / (geo.G * geo.Rmaj)**2
   )
   tic_psi = jnp.ones_like(toc_psi)
   toc_dens_el = jnp.ones_like(geo.vpr)

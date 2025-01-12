@@ -86,8 +86,8 @@ def calc_psidot(
       * consts.mu0
       * 16
       * jnp.pi**2
-      * geo.Phib**2
-      / geo.F**2
+      * (jnp.pi * geo.rho_b**2)**2
+      / (geo.G * geo.Rmaj)**2
   )
   # Calculate diffusion term coefficient
   d_face_psi = geo.g2g3_over_rhon_face

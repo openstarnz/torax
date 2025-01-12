@@ -350,11 +350,10 @@ def calc_neoclassical(
 
   # calculate bootstrap current
   prefactor = (
-      -geo.F_face
+      -geo.G_face * geo.Rmaj
       * dynamic_source_runtime_params.bootstrap_mult
       * 2
       * jnp.pi
-      / geo.B0
   )
 
   pe = true_ne_face * (temp_el.face_value()) * 1e3 * 1.6e-19
