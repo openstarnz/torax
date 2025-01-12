@@ -55,7 +55,6 @@ def make_diffusion_terms(
     )
 
   # Boundary rows need to be special-cased.
-  # TODO: Check the signs for these formulas
   # Left face
   diag = diag.at[0].set(jax.lax.cond(
     var.left_face_constraint_is_grad,
