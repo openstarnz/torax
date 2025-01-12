@@ -164,9 +164,10 @@ class Geometry:
   g2g3_over_rhon: chex.Array
   g2g3_over_rhon_face: chex.Array
   g2g3_over_rhon_hires: chex.Array
-  F: chex.Array
-  F_face: chex.Array
-  F_hires: chex.Array
+  # F is defined as R B_tor, and G is defined such that F=G R_0 B_0.
+  G: chex.Array
+  G_face: chex.Array
+  G_hires: chex.Array
   Rin: chex.Array
   Rin_face: chex.Array
   Rout: chex.Array
@@ -271,6 +272,18 @@ class Geometry:
   def z_magnetic_axis(self) -> chex.Numeric:
     return self._z_magnetic_axis
 
+  @property
+  def F(self) -> jax.Array:
+    return self.G * self.Rmaj * self.B0
+
+  @property
+  def F_face(self):
+    return self.G_face * self.Rmaj * self.B0
+
+  @property
+  def F_hires(self):
+    return self.G_hires * self.Rmaj * self.B0
+
 
 @chex.dataclass(frozen=True)
 class GeometryProvider:
@@ -305,9 +318,9 @@ class GeometryProvider:
   g2g3_over_rhon: interpolated_param.InterpolatedVarSingleAxis
   g2g3_over_rhon_face: interpolated_param.InterpolatedVarSingleAxis
   g2g3_over_rhon_hires: interpolated_param.InterpolatedVarSingleAxis
-  F: interpolated_param.InterpolatedVarSingleAxis
-  F_face: interpolated_param.InterpolatedVarSingleAxis
-  F_hires: interpolated_param.InterpolatedVarSingleAxis
+  G: interpolated_param.InterpolatedVarSingleAxis
+  G_face: interpolated_param.InterpolatedVarSingleAxis
+  G_hires: interpolated_param.InterpolatedVarSingleAxis
   Rin: interpolated_param.InterpolatedVarSingleAxis
   Rin_face: interpolated_param.InterpolatedVarSingleAxis
   Rout: interpolated_param.InterpolatedVarSingleAxis
@@ -568,8 +581,8 @@ def build_circular_geometry(
   J = np.ones(len(rho))
   J_face = np.ones(len(rho_face))
   # simplified (constant) version of the F=B*R function
-  F = np.ones(len(rho)) * Rmaj * B0
-  F_face = np.ones(len(rho_face)) * Rmaj * B0
+  G = np.ones_like(rho)
+  G_face = np.ones_like(rho_face)
 
   # Using an approximation where:
   # g2g3_over_rhon = 16 * pi**4 * G2 / (J * R) where:
@@ -612,8 +625,8 @@ def build_circular_geometry(
   )
 
   g3_hires = 1 / (Rmaj**2 * (1 - (rho_hires / Rmaj) ** 2) ** (3.0 / 2.0))
-  F_hires = np.ones(len(rho_hires)) * B0 * Rmaj
-  g2g3_over_rhon_hires = 4 * np.pi**2 * vpr_hires * g3_hires * B0 / F_hires
+  G_hires = np.ones_like(rho_hires)
+  g2g3_over_rhon_hires = 4 * np.pi**2 * vpr_hires * g3_hires / (G_hires * Rmaj)
 
   return CircularAnalyticalGeometry(
       # Set the standard geometry params.
@@ -644,9 +657,9 @@ def build_circular_geometry(
       g2g3_over_rhon=g2g3_over_rhon,
       g2g3_over_rhon_face=g2g3_over_rhon_face,
       g2g3_over_rhon_hires=g2g3_over_rhon_hires,
-      F=F,
-      F_face=F_face,
-      F_hires=F_hires,
+      G=G,
+      G_face=G_face,
+      G_hires=G_hires,
       Rin=Rin,
       Rin_face=Rin_face,
       Rout=Rout,
@@ -694,10 +707,10 @@ class StandardGeometryIntermediates:
   B: Toroidal magnetic field on axis [T].
   psi: Poloidal flux profile
   Ip_profile: Plasma current profile
-  Phi: Toroidal flux profile
+  rho: Radial grid points
   Rin: Radius of the flux surface at the inboard side at midplane
   Rout: Radius of the flux surface at the outboard side at midplane
-  F: Toroidal field flux function
+  G: Normalised toroidal field flux function
   int_dl_over_Bp: 1/ oint (dl / Bp) (contour integral)
   flux_surf_avg_1_over_R2: <1/R**2>
   flux_surf_avg_Bp2: <Bp**2>
@@ -720,10 +733,10 @@ class StandardGeometryIntermediates:
   B: chex.Numeric
   psi: chex.Array
   Ip_profile: chex.Array
-  Phi: chex.Array
+  rho: chex.Array
   Rin: chex.Array
   Rout: chex.Array
-  F: chex.Array
+  G: chex.Array
   int_dl_over_Bp: chex.Array
   flux_surf_avg_1_over_R2: chex.Array
   flux_surf_avg_Bp2: chex.Array
@@ -742,7 +755,7 @@ class StandardGeometryIntermediates:
     # Check if last flux surface is diverted and correct if so
     if self.flux_surf_avg_Bp2[-1] < 1e-10:
       # Calculate rhon
-      rhon = np.sqrt(self.Phi / self.Phi[-1])
+      rhon = self.rho / self.rho[-1]
 
       # Create a lambda function for the Cubic spline fit.
       spline = lambda rho, data, x, bc_type: scipy.interpolate.CubicSpline(
@@ -831,13 +844,15 @@ class StandardGeometryIntermediates:
     Ip_chease = chease_data['Ipprofile'] / constants.CONSTANTS.mu0 * Rmaj * B0
 
     # toroidal flux
-    Phi = (chease_data['RHO_TOR=sqrt(Phi/pi/B0)'] * Rmaj) ** 2 * B0 * np.pi
+    rho = chease_data['RHO_TOR=sqrt(Phi/pi/B0)'] * Rmaj
+    Phi = np.pi * B0 * rho**2
 
     # midplane radii
     Rin_chease = chease_data['R_INBOARD'] * Rmaj
     Rout_chease = chease_data['R_OUTBOARD'] * Rmaj
     # toroidal field flux function
-    F = chease_data['T=RBphi'] * Rmaj * B0
+    G = chease_data['T=RBphi']
+    F = G * Rmaj * B0
 
     int_dl_over_Bp = chease_data['Int(Rdlp/|grad(psi)|)=Int(Jdchi)'] * Rmaj / B0
     flux_surf_avg_1_over_R2 = chease_data['<1/R**2>'] / Rmaj**2
@@ -858,10 +873,10 @@ class StandardGeometryIntermediates:
         B=B0,
         psi=psi,
         Ip_profile=Ip_chease,
-        Phi=Phi,
+        rho=rho,
         Rin=Rin_chease,
         Rout=Rout_chease,
-        F=F,
+        G=G,
         int_dl_over_Bp=int_dl_over_Bp,
         flux_surf_avg_1_over_R2=flux_surf_avg_1_over_R2,
         flux_surf_avg_Bp2=flux_surf_avg_Bp2,
@@ -1552,9 +1567,9 @@ def build_standard_geometry(
       rho_face_norm, intermediate.elongation
   )
 
-  F_face = rhon_interpolation_func(rho_face_norm, intermediate.F)
-  F = rhon_interpolation_func(rho_norm, intermediate.F)
-  F_hires = rhon_interpolation_func(rho_hires_norm, intermediate.F)
+  G_face = rhon_interpolation_func(rho_face_norm, intermediate.G)
+  G = rhon_interpolation_func(rho_norm, intermediate.G)
+  G_hires = rhon_interpolation_func(rho_hires_norm, intermediate.G)
 
   psi = rhon_interpolation_func(rho_norm, intermediate.psi)
   psi_from_Ip = rhon_interpolation_func(rho_norm, psi_from_Ip)
@@ -1629,9 +1644,9 @@ def build_standard_geometry(
       g2g3_over_rhon=g2g3_over_rhon,
       g2g3_over_rhon_face=g2g3_over_rhon_face,
       g2g3_over_rhon_hires=g2g3_over_rhon_hires,
-      F=F,
-      F_face=F_face,
-      F_hires=F_hires,
+      G=G,
+      G_face=G_face,
+      G_hires=G_hires,
       Rin=Rin,
       Rin_face=Rin_face,
       Rout=Rout,

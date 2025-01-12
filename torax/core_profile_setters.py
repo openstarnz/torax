@@ -530,8 +530,8 @@ def _update_psi_from_j(
   )
   scale = jnp.concatenate((
       jnp.zeros((1,)),
-      (16 * jnp.pi**3 * constants.CONSTANTS.mu0 * geo.Phib)
-      / (geo.F_hires[1:] * geo.g2g3_over_rhon_hires[1:]),
+      (16 * jnp.pi**3 * constants.CONSTANTS.mu0 * (jnp.pi * geo.rho_b**2))
+      / ((geo.G_hires[1:] * geo.Rmaj) * geo.g2g3_over_rhon_hires[1:]),
   ))
   # dpsi_dr on the cell grid
   dpsi_drhon_hires = scale * Ip_profile
@@ -561,8 +561,8 @@ def _calculate_psi_grad_constraint(
   return (
       dynamic_runtime_params_slice.profile_conditions.Ip_tot
       * 1e6
-      * (16 * jnp.pi**3 * constants.CONSTANTS.mu0 * geo.Phib)
-      / (geo.g2g3_over_rhon_face[-1] * geo.F_face[-1])
+      * (16 * jnp.pi**3 * constants.CONSTANTS.mu0 * (jnp.pi * geo.rho_b**2))
+      / (geo.g2g3_over_rhon_face[-1] * (geo.G_face[-1] * geo.Rmaj))
   )
 
 
