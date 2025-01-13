@@ -67,9 +67,15 @@ PSI = "psi"
 PSIDOT = "psidot"
 PSI_RIGHT_GRAD_BC = "psi_right_grad_bc"
 NE = "ne"
+NE_LEFT_BC = "ne_left_bc"
+NE_LEFT_BC_IS_GRAD = "ne_left_bc_is_grad"
 NE_RIGHT_BC = "ne_right_bc"
+NE_RIGHT_BC_IS_GRAD = "ne_right_bc_is_grad"
 NI = "ni"
+NI_LEFT_BC = "ni_left_bc"
+NI_LEFT_BC_IS_GRAD = "ni_left_bc_is_grad"
 NI_RIGHT_BC = "ni_right_bc"
+NI_RIGHT_BC_IS_GRAD = "ni_right_bc_is_grad"
 JTOT = "jtot"
 JTOT_FACE = "jtot_face"
 JOHM = "johm"
@@ -288,9 +294,15 @@ class StateHistory:
     )
     xr_dict[PSIDOT] = self.core_profiles.psidot.value
     xr_dict[NE] = self.core_profiles.ne.value
-    xr_dict[NE_RIGHT_BC] = self.core_profiles.ne.right_face_value_constraint
+    xr_dict[NE_LEFT_BC] = self.core_profiles.ne.left_face_constraint
+    xr_dict[NE_LEFT_BC_IS_GRAD] = self.core_profiles.ne.left_face_constraint_is_grad
+    xr_dict[NE_RIGHT_BC] = self.core_profiles.ne.right_face_constraint
+    xr_dict[NE_RIGHT_BC_IS_GRAD] = self.core_profiles.ne.right_face_constraint_is_grad
     xr_dict[NI] = self.core_profiles.ni.value
-    xr_dict[NI_RIGHT_BC] = self.core_profiles.ni.right_face_value_constraint
+    xr_dict[NI_LEFT_BC] = self.core_profiles.ni.left_face_constraint
+    xr_dict[NI_LEFT_BC_IS_GRAD] = self.core_profiles.ni.left_face_constraint_is_grad
+    xr_dict[NI_RIGHT_BC] = self.core_profiles.ni.right_face_constraint
+    xr_dict[NI_RIGHT_BC_IS_GRAD] = self.core_profiles.ni.right_face_constraint_is_grad
 
     # Currents.
     xr_dict[JTOT] = self.core_profiles.currents.jtot
