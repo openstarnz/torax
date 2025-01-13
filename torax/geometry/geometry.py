@@ -138,8 +138,7 @@ class Geometry:
   geometry_type: int
   torax_mesh: Grid1D
   drho_norm: array_typing.ArrayFloat
-  Phi: chex.Array
-  Phi_face: chex.Array
+  rho_b: chex.Array
   Rmaj: chex.Array
   Rmin: chex.Array
   B0: chex.Array
@@ -181,6 +180,31 @@ class Geometry:
   Phibdot: chex.Array
   _z_magnetic_axis: chex.Array
 
+  def __post_init__(self):
+    self.sanity_check()
+
+  def sanity_check(self):
+    # jax_utils.error_if doesn't work here because no further computation is done,
+    # and the class is frozen.
+    if (
+        not jax_utils.is_tracer(self.Phi)
+        and not jnp.allclose(self.Phi, jnp.pi * self.B0 * self.rho**2)
+    ):
+      raise ValueError('Phi does not match expected value.')
+    if (
+        not jax_utils.is_tracer(self.Phi_face)
+        and not jnp.allclose(self.Phi_face, jnp.pi * self.B0 * self.rho_face**2)
+    ):
+      raise ValueError('Phi_face does not match expected value.')
+
+  @property
+  def Phi(self) -> chex.Array:
+    return np.pi * self.B0 * self.rho ** 2
+
+  @property
+  def Phi_face(self) -> chex.Array:
+    return np.pi * self.B0 * self.rho_face ** 2
+
   @property
   def rho_norm(self) -> chex.Array:
     return self.torax_mesh.cell_centers
@@ -208,11 +232,6 @@ class Geometry:
   @property
   def drho(self) -> chex.Array:
     return self.drho_norm * self.rho_b
-
-  @property
-  def rho_b(self) -> chex.Array:
-    """Toroidal flux coordinate at boundary (LCFS)."""
-    return jnp.sqrt(self.Phib / np.pi / self.B0)
 
   @property
   def Phib(self) -> chex.Array:
@@ -260,8 +279,7 @@ class GeometryProvider:
   geometry_type: int
   torax_mesh: Grid1D
   drho_norm: interpolated_param.InterpolatedVarSingleAxis
-  Phi: interpolated_param.InterpolatedVarSingleAxis
-  Phi_face: interpolated_param.InterpolatedVarSingleAxis
+  rho_b: interpolated_param.InterpolatedVarSingleAxis
   Rmaj: interpolated_param.InterpolatedVarSingleAxis
   Rmin: interpolated_param.InterpolatedVarSingleAxis
   B0: interpolated_param.InterpolatedVarSingleAxis
@@ -486,10 +504,6 @@ def build_circular_geometry(
   Rmaj = np.array(Rmaj)
   B0 = np.array(B0)
 
-  # Define toroidal flux
-  Phi = np.pi * B0 * rho**2
-  Phi_face = np.pi * B0 * rho_face**2
-
   # Elongation profile.
   # Set to be a linearly increasing function from 1 to elongation_LCFS, which
   # is the elongation value at the last closed flux surface, set in config.
@@ -606,8 +620,7 @@ def build_circular_geometry(
       geometry_type=GeometryType.CIRCULAR.value,
       drho_norm=np.asarray(drho_norm),
       torax_mesh=mesh,
-      Phi=Phi,
-      Phi_face=Phi_face,
+      rho_b=rho_b,
       Rmaj=Rmaj,
       Rmin=rho_b,
       B0=B0,
@@ -1539,9 +1552,6 @@ def build_standard_geometry(
       rho_face_norm, intermediate.elongation
   )
 
-  Phi_face = rhon_interpolation_func(rho_face_norm, intermediate.Phi)
-  Phi = rhon_interpolation_func(rho_norm, intermediate.Phi)
-
   F_face = rhon_interpolation_func(rho_face_norm, intermediate.F)
   F = rhon_interpolation_func(rho_norm, intermediate.F)
   F_hires = rhon_interpolation_func(rho_hires_norm, intermediate.F)
@@ -1595,8 +1605,7 @@ def build_standard_geometry(
       geometry_type=intermediate.geometry_type.value,
       drho_norm=np.asarray(drho_norm),
       torax_mesh=mesh,
-      Phi=Phi,
-      Phi_face=Phi_face,
+      rho_b=rho_b,
       Rmaj=intermediate.Rmaj,
       Rmin=intermediate.Rmin,
       B0=intermediate.B,
