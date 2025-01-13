@@ -1125,11 +1125,11 @@ class StandardGeometryIntermediates:
         Rmin=Rmin,
         B=B0,
         psi=psi[0] - psi,
-        Phi=Phi,
+        rho=np.sqrt(Phi / np.pi / B0),
         Ip_profile=np.abs(LY['ItQ']),
         Rin=LY['rgeom'] - LY['aminor'],
         Rout=LY['rgeom'] + LY['aminor'],
-        F=np.abs(LY['TQ']),
+        G=np.abs(LY['TQ']) / Rmaj / B0,
         int_dl_over_Bp=1 / LY_Q1Q,
         flux_surf_avg_1_over_R2=LY['Q2Q'],
         flux_surf_avg_Bp2=np.abs(LY['Q3Q']) / (4 * np.pi**2),
@@ -1427,10 +1427,10 @@ class StandardGeometryIntermediates:
         # TODO(b/335204606): handle COCOS shenanigans
         psi=psi_interpolant * 2 * np.pi,
         Ip_profile=Ip_eqdsk,
-        Phi=Phi_eqdsk,
+        rho=np.sqrt(Phi_eqdsk / np.pi / B0),
         Rin=R_inboard,
         Rout=R_outboard,
-        F=F_eqdsk,
+        G=F_eqdsk / B0 / Rmaj,
         int_dl_over_Bp=int_dl_over_Bp_eqdsk,
         flux_surf_avg_1_over_R2=flux_surf_avg_1_over_R2_eqdsk,
         flux_surf_avg_RBp=flux_surf_avg_RBp_eqdsk,
@@ -1462,7 +1462,7 @@ def build_standard_geometry(
 
   # Toroidal flux coordinates
   # TODO: Account for the inner surface
-  rho_intermediate = np.sqrt(intermediate.Phi / (np.pi * intermediate.B))
+  rho_intermediate = intermediate.rho
   rho_norm_intermediate = rho_intermediate / rho_intermediate[-1]
 
   # flux surface integrals of various geometry quantities
@@ -1487,8 +1487,8 @@ def build_standard_geometry(
   # Ip profile. Needed since input psi profile may have noisy second derivatives
   dpsidrhon = (
       intermediate.Ip_profile[1:]
-      * (16 * constants.CONSTANTS.mu0 * np.pi**3 * intermediate.Phi[-1])
-      / (g2g3_over_rhon[1:] * intermediate.F[1:])
+      * (16 * constants.CONSTANTS.mu0 * np.pi**3 * (np.pi * intermediate.rho[-1] ** 2))
+      / (g2g3_over_rhon[1:] * (intermediate.G[1:] * intermediate.Rmaj))
   )
   dpsidrhon = np.concatenate((np.zeros(1), dpsidrhon))
   psi_from_Ip = scipy.integrate.cumulative_trapezoid(
@@ -1498,9 +1498,9 @@ def build_standard_geometry(
   # set Ip-consistent psi derivative boundary condition (although will be
   # replaced later with an fvm constraint)
   psi_from_Ip[-1] = psi_from_Ip[-2] + (
-      16 * constants.CONSTANTS.mu0 * np.pi**3 * intermediate.Phi[-1]
+      16 * constants.CONSTANTS.mu0 * np.pi**3 * (np.pi * intermediate.rho[-1] ** 2)
   ) * intermediate.Ip_profile[-1] / (
-      g2g3_over_rhon[-1] * intermediate.F[-1]
+      g2g3_over_rhon[-1] * (intermediate.G[1:] * intermediate.Rmaj)
   ) * (
       rho_norm_intermediate[-1] - rho_norm_intermediate[-2]
   )
