@@ -161,6 +161,8 @@ class ProfileConditions(
     if torax_mesh is None:
       raise ValueError('torax_mesh is required for ProfileConditionsProvider.')
 
+    # TODO: Check the following code
+
     # Overrides for profile conditions provider.
     if self.Te_bound_right is None:
       logging.info('Setting electron temperature boundary condition using Te.')
