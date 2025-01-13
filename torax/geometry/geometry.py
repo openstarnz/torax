@@ -625,6 +625,7 @@ def build_circular_geometry(
       geometry_type=GeometryType.CIRCULAR.value,
       drho_norm=np.asarray(drho_norm),
       torax_mesh=mesh,
+      rho_i=rho_i,
       rho_b=rho_b,
       Rmaj=Rmaj,
       Rmin=rho_b,
