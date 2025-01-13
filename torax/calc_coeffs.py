@@ -629,13 +629,17 @@ def _calc_coeffs_full(
 
   # Convection term
   # To maintaing quasineutrality, the electron particle convection and diffusion coefficients must be the same
-  # TODO: Check if just using core_profiles is fine
-  # ion_heat_convection = 5 / 2 * (geo.g0_face * true_ni_face * v_face_el - d_face_el * geo.g1_over_vpr_face * core_profiles.ni.face_grad() * dynamic_runtime_params_slice.numerics.nref) * consts.keV2J
-  el_heat_convection = 5 / 2 * (geo.g0_face * true_ne_face * v_face_el - d_face_el * geo.g1_over_vpr_face * core_profiles.ne.face_grad() * dynamic_runtime_params_slice.numerics.nref)
+  ion_heat_convection = 5 / 2 * (
+      geo.g0_face * true_ni_face * v_face_el
+      - d_face_el * geo.g1_over_vpr_face * core_profiles.ni.face_grad() * dynamic_runtime_params_slice.numerics.nref
+  ) * consts.keV2J
+  el_heat_convection = 5 / 2 * (
+      geo.g0_face * true_ne_face * v_face_el
+      - d_face_el * geo.g1_over_vpr_face * core_profiles.ne.face_grad() * dynamic_runtime_params_slice.numerics.nref
+  ) * consts.keV2J
 
-  # print(full_chi_face_ion / ion_heat_convection)
-  np.set_printoptions(suppress=True)
-  print((full_chi_face_el-chi_face_per_el) * core_profiles.temp_el.face_grad() / consts.keV2J / (el_heat_convection * core_profiles.temp_el.face_value()))
+  v_heat_face_ion += ion_heat_convection
+  v_heat_face_el += el_heat_convection
 
   # Add phibdot terms to heat transport convection
   v_heat_face_ion += (
