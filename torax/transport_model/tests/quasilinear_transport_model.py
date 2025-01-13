@@ -151,7 +151,7 @@ class QuasilinearTransportModelTest(parameterized.TestCase):
   def test_calculate_chiGB(self):
     """Tests that chiGB is calculated correctly."""
     core_profiles = _get_dummy_core_profiles(
-        value=jnp.array([1.0]), right_face_constraint=jnp.array(1.0)
+        value=jnp.array([1.0]), right_face_value_constraint=jnp.array(1.0)
     )
     chiGB = quasilinear_transport_model.calculate_chiGB(
         reference_temperature=core_profiles.temp_ion.face_value(),
@@ -169,7 +169,7 @@ class QuasilinearTransportModelTest(parameterized.TestCase):
   def test_calculate_alpha(self):
     """Tests that alpha is calculated correctly."""
     core_profiles = _get_dummy_core_profiles(
-        value=jnp.array([1.0]), right_face_constraint=jnp.array(1.0)
+        value=jnp.array([1.0]), right_face_value_constraint=jnp.array(1.0)
     )
     normalized_logarithmic_gradients = (
         quasilinear_transport_model.NormalizedLogarithmicGradients(
@@ -193,10 +193,10 @@ class QuasilinearTransportModelTest(parameterized.TestCase):
 
   def test_calculate_normalized_logarithmic_gradient(self):
     """Tests that calculate_normalized_logarithmic_gradient is calculated correctly."""
-    dummy_cell_variable = cell_variable.CellVariable(
+    dummy_cell_variable = cell_variable.CellVariable.of(
         value=jnp.array([2.0, 1.0]),
-        right_face_constraint=jnp.array(0.5),
-        right_face_grad_constraint=None,
+        left_face_grad_constraint=jnp.array(0.0),
+        right_face_value_constraint=jnp.array(0.5),
         dr=jnp.array(1.0),
     )
     radial_coordinate = jnp.array([0.0, 1.0])
@@ -263,14 +263,14 @@ class FakeQuasilinearTransportModel(
     )
 
 
-def _get_dummy_core_profiles(value, right_face_constraint):
+def _get_dummy_core_profiles(value, right_face_value_constraint):
   """Returns dummy core profiles for testing."""
   geo = geometry.build_circular_geometry()
   currents = state.Currents.zeros(geo)
-  dummy_cell_variable = cell_variable.CellVariable(
+  dummy_cell_variable = cell_variable.CellVariable.of(
       value=value,
-      right_face_constraint=right_face_constraint,
-      right_face_grad_constraint=None,
+      left_face_grad_constraint=jnp.array(0.0),
+      right_face_value_constraint=right_face_value_constraint,
       dr=jnp.array(1.0),
   )
   return state.CoreProfiles(

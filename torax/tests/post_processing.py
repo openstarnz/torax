@@ -17,7 +17,7 @@
 import dataclasses
 from absl.testing import absltest
 from absl.testing import parameterized
-import jax
+import jax.numpy as jnp
 import numpy as np
 import scipy
 from torax import constants
@@ -87,8 +87,8 @@ class PostProcessingTest(parameterized.TestCase):
         core_profiles=self.core_profiles,
         core_transport=state.CoreTransport.zeros(self.geo),
         core_sources=self.source_profiles,
-        t=jax.numpy.array(0.0),
-        dt=jax.numpy.array(0.1),
+        t=jnp.array(0.0),
+        dt=jnp.array(0.1),
         time_step_calculator_state=None,
         post_processed_outputs=state.PostProcessedOutputs.zeros(self.geo),
         stepper_numeric_outputs=state.StepperNumericOutputs(
@@ -121,12 +121,10 @@ class PostProcessingTest(parameterized.TestCase):
     def _make_constant_core_profile(
         value: float,
     ) -> cell_variable.CellVariable:
-      return cell_variable.CellVariable(
+      return cell_variable.CellVariable.of(
           value=value * np.ones_like(self.geo.rho_norm),
-          left_face_grad_constraint=np.zeros(()),
-          left_face_constraint=None,
-          right_face_grad_constraint=None,
-          right_face_constraint=jax.numpy.array(value),
+          left_face_grad_constraint=jnp.zeros(()),
+          right_face_value_constraint=jnp.array(value),
           dr=self.geo.drho_norm,
       )
 

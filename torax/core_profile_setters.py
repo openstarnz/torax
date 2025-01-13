@@ -41,24 +41,16 @@ def updated_ion_temperature(
     geo: geometry.Geometry,
 ) -> cell_variable.CellVariable:
   """Updated ion temp. Used upon initialization and if temp_ion=False."""
-  # pylint: disable=invalid-name
-  Ti_bound_right = (
-      dynamic_runtime_params_slice.profile_conditions.Ti_bound_right
+  prof_conds = dynamic_runtime_params_slice.profile_conditions
+  return _updated_temperature(
+    geo.drho_norm,
+    prof_conds.Ti,
+    prof_conds.Ti_bound_left,
+    prof_conds.Ti_bound_left_is_grad,
+    prof_conds.Ti_bound_right,
+    prof_conds.Ti_bound_right_is_grad,
+    'Ti',
   )
-
-  Ti_bound_right = jax_utils.error_if_not_positive(
-      Ti_bound_right,
-      'Ti_bound_right',
-  )
-  temp_ion = cell_variable.CellVariable(
-      value=dynamic_runtime_params_slice.profile_conditions.Ti,
-      left_face_grad_constraint=jnp.zeros(()),
-      right_face_grad_constraint=None,
-      right_face_constraint=Ti_bound_right,
-      dr=geo.drho_norm,
-  )
-  # pylint: enable=invalid-name
-  return temp_ion
 
 
 def updated_electron_temperature(
@@ -66,24 +58,38 @@ def updated_electron_temperature(
     geo: geometry.Geometry,
 ) -> cell_variable.CellVariable:
   """Updated electron temp. Used upon initialization and if temp_el=False."""
-  # pylint: disable=invalid-name
-  Te_bound_right = (
-      dynamic_runtime_params_slice.profile_conditions.Te_bound_right
+  prof_conds = dynamic_runtime_params_slice.profile_conditions
+  return _updated_temperature(
+    geo.drho_norm,
+    prof_conds.Te,
+    prof_conds.Te_bound_left,
+    prof_conds.Te_bound_left_is_grad,
+    prof_conds.Te_bound_right,
+    prof_conds.Te_bound_right_is_grad,
+    'Te',
   )
 
-  Te_bound_right = jax_utils.error_if_not_positive(
-      Te_bound_right,
-      'Te_bound_right',
+
+def _updated_temperature(
+    drho_norm: jax.Array,
+    value: jax.Array,
+    bound_left: jax.Array,
+    bound_left_is_grad: bool,
+    bound_right: jax.Array,
+    bound_right_is_grad: bool,
+    name: str,
+) -> cell_variable.CellVariable:
+  """Helper method for updated_ion_temperature and updated_electron_temperature."""
+  left_constraint = _ensure_value_boundary_is_positive(bound_left, bound_left_is_grad, f'{name}_bound_left')
+  right_constraint = _ensure_value_boundary_is_positive(bound_right, bound_right_is_grad, f'{name}_bound_right')
+  return cell_variable.CellVariable(
+      value=value,
+      dr=drho_norm,
+      left_face_constraint=left_constraint,
+      left_face_constraint_is_grad=bound_left_is_grad,
+      right_face_constraint=right_constraint,
+      right_face_constraint_is_grad=bound_right_is_grad,
   )
-  temp_el = cell_variable.CellVariable(
-      value=dynamic_runtime_params_slice.profile_conditions.Te,
-      left_face_grad_constraint=jnp.zeros(()),
-      right_face_grad_constraint=None,
-      right_face_constraint=Te_bound_right,
-      dr=geo.drho_norm,
-  )
-  # pylint: enable=invalid-name
-  return temp_el
 
 
 # pylint: disable=invalid-name
@@ -92,28 +98,34 @@ def _get_ne(
     geo: geometry.Geometry,
 ) -> cell_variable.CellVariable:
   """Helper to get the electron density profile at the current timestep."""
+  prof_conds = dynamic_runtime_params_slice.profile_conditions
+
   # pylint: disable=invalid-name
   nGW = (
-      dynamic_runtime_params_slice.profile_conditions.Ip_tot
+      prof_conds.Ip_tot
       / (jnp.pi * geo.Rmin**2)
       * 1e20
       / dynamic_runtime_params_slice.numerics.nref
   )
   ne_value = jnp.where(
-      dynamic_runtime_params_slice.profile_conditions.ne_is_fGW,
-      dynamic_runtime_params_slice.profile_conditions.ne * nGW,
-      dynamic_runtime_params_slice.profile_conditions.ne,
+      prof_conds.ne_is_fGW,
+      prof_conds.ne * nGW,
+      prof_conds.ne,
   )
-  # Calculate ne_bound_right.
+  ne_bound_left = jnp.where(
+      prof_conds.ne_bound_left_is_fGW,
+      prof_conds.ne_bound_left * nGW,
+      prof_conds.ne_bound_left,
+  )
   ne_bound_right = jnp.where(
-      dynamic_runtime_params_slice.profile_conditions.ne_bound_right_is_fGW,
-      dynamic_runtime_params_slice.profile_conditions.ne_bound_right * nGW,
-      dynamic_runtime_params_slice.profile_conditions.ne_bound_right,
+      prof_conds.ne_bound_right_is_fGW,
+      prof_conds.ne_bound_right * nGW,
+      prof_conds.ne_bound_right,
   )
 
-  if dynamic_runtime_params_slice.profile_conditions.normalize_to_nbar:
-    face_left = ne_value[0]  # Zero gradient boundary condition at left face.
-    face_right = ne_bound_right
+  if prof_conds.normalize_to_nbar:
+    face_left = jnp.where(prof_conds.ne_bound_left_is_grad, ne_value[0], ne_bound_left)
+    face_right = jnp.where(prof_conds.ne_bound_right_is_grad, ne_value[-1], ne_bound_right)
     face_inner = (ne_value[..., :-1] + ne_value[..., 1:]) / 2.0
     ne_face = jnp.concatenate(
         [face_left[None], face_inner, face_right[None]],
@@ -129,39 +141,67 @@ def _get_ne(
     Rmin_out = geo.Rout_face[-1] - geo.Rout_face[0]
     # find target nbar in absolute units
     target_nbar = jnp.where(
-        dynamic_runtime_params_slice.profile_conditions.ne_is_fGW,
-        dynamic_runtime_params_slice.profile_conditions.nbar * nGW,
-        dynamic_runtime_params_slice.profile_conditions.nbar,
+        prof_conds.ne_is_fGW,
+        prof_conds.nbar * nGW,
+        prof_conds.nbar,
     )
-    if (
-        not dynamic_runtime_params_slice.profile_conditions.ne_bound_right_is_absolute
-    ):
-      # In this case, ne_bound_right is taken from ne and we also normalize it.
-      C = target_nbar / (_trapz(ne_face, geo.Rout_face) / Rmin_out)
-      # pylint: enable=invalid-name
-      ne_bound_right = C * ne_bound_right
-    else:
-      # If ne_bound_right is absolute, subtract off contribution from outer
-      # face to get C we need to multiply the inner values with.
-      nbar_from_ne_face_inner = (
-          _trapz(ne_face[:-1], geo.Rout_face[:-1]) / Rmin_out
-      )
+    left_is_absolute = prof_conds.ne_bound_left_is_absolute
+    right_is_absolute = prof_conds.ne_bound_right_is_absolute
 
-      dr_edge = geo.Rout_face[-1] - geo.Rout_face[-2]
+    start_idx = 1 if left_is_absolute else 0
+    end_idx = -1 if right_is_absolute else None
 
-      C = (target_nbar - 0.5 * ne_face[-1] * dr_edge / Rmin_out) / (
-          nbar_from_ne_face_inner + 0.5 * ne_face[-2] * dr_edge / Rmin_out
-      )
+    inner_nbar = _trapz(ne_face[start_idx:end_idx], geo.Rout_face[start_idx:end_idx]) / Rmin_out
+
+    numerator_change = 0
+    denominator_change = 0
+
+    if left_is_absolute:
+        numerator_change += ne_face[0] * (geo.Rout_face[1] - geo.Rout_face[0])
+        denominator_change += ne_face[1] * (geo.Rout_face[1] - geo.Rout_face[0])
+    if right_is_absolute:
+        numerator_change += ne_face[-1] * (geo.Rout_face[-1] - geo.Rout_face[-2])
+        denominator_change += ne_face[-2] * (geo.Rout_face[-1] - geo.Rout_face[-2])
+
+    C = ((target_nbar - 0.5 * numerator_change / Rmin_out) /
+         (inner_nbar + 0.5 * denominator_change / Rmin_out))
+
+    if not left_is_absolute:
+        ne_bound_left *= C
+    if not right_is_absolute:
+        ne_bound_right *= C
   else:
     C = 1
 
   ne_value = C * ne_value
 
+  # TODO: Add tests to check that the left and right boundaries are correct in the new cases.
+
+  if prof_conds.normalize_to_nbar:
+    # Verify that the line integrated value is correct
+    face_left = jnp.where(prof_conds.ne_bound_left_is_grad, ne_value[0], ne_bound_left)
+    face_right = jnp.where(prof_conds.ne_bound_right_is_grad, ne_value[-1], ne_bound_right)
+    face_inner = (ne_value[..., :-1] + ne_value[..., 1:]) / 2.0
+    ne_face = jnp.concatenate(
+        [face_left[None], face_inner, face_right[None]],
+    )
+    Rmin_out = geo.Rout_face[-1] - geo.Rout_face[0]
+    actual_nbar = _trapz(ne_face, geo.Rout_face) / Rmin_out
+    target_nbar = jnp.where(
+      prof_conds.ne_is_fGW,
+      prof_conds.nbar * nGW,
+      prof_conds.nbar,
+    )
+    diff = actual_nbar - target_nbar
+    ne_value = jax_utils.error_if(ne_value, diff > 1e-6, 'nbar mismatch')
+
   ne = cell_variable.CellVariable(
       value=ne_value,
       dr=geo.drho_norm,
-      right_face_grad_constraint=None,
-      right_face_constraint=jnp.array(ne_bound_right),
+      left_face_constraint=ne_bound_left,
+      left_face_constraint_is_grad=prof_conds.ne_bound_left_is_grad,
+      right_face_constraint=ne_bound_right,
+      right_face_constraint_is_grad=prof_conds.ne_bound_right_is_grad,
   )
   return ne
 
@@ -187,27 +227,39 @@ def _updated_ion_density(
   Zeff_face = dynamic_runtime_params_slice.plasma_composition.Zeff_face
 
   dilution_factor = physics.get_main_ion_dilution_factor(Zi, Zimp, Zeff)
-  dilution_factor_edge = physics.get_main_ion_dilution_factor(
+  dilution_factor_inner_edge = physics.get_main_ion_dilution_factor(
+      Zi, Zimp, Zeff_face[0]
+  )
+  dilution_factor_outer_edge = physics.get_main_ion_dilution_factor(
       Zi, Zimp, Zeff_face[-1]
   )
 
+  # Assume that Zeff varies slowly across the plasma, so that the gradient of
+  # ni and nimp are simply proportional to the gradient of ne
   ni = cell_variable.CellVariable(
       value=ne.value * dilution_factor,
       dr=geo.drho_norm,
-      right_face_grad_constraint=None,
-      right_face_constraint=jnp.array(
-          ne.right_face_constraint * dilution_factor_edge
+      left_face_constraint=jnp.array(
+          ne.left_face_constraint * dilution_factor_inner_edge
       ),
+      left_face_constraint_is_grad=ne.left_face_constraint_is_grad,
+      right_face_constraint=jnp.array(
+          ne.right_face_constraint * dilution_factor_outer_edge
+      ),
+      right_face_constraint_is_grad=ne.right_face_constraint_is_grad,
   )
 
   nimp = cell_variable.CellVariable(
       value=(ne.value - ni.value * Zi) / Zimp,
       dr=geo.drho_norm,
-      right_face_grad_constraint=None,
+      left_face_constraint=jnp.array(
+          ne.left_face_constraint - ni.left_face_constraint * Zi
+      ) / Zimp,
+      left_face_constraint_is_grad=ne.left_face_constraint_is_grad,
       right_face_constraint=jnp.array(
           ne.right_face_constraint - ni.right_face_constraint * Zi
-      )
-      / Zimp,
+      ) / Zimp,
+      right_face_constraint_is_grad=ne.right_face_constraint_is_grad,
   )
   return ni, nimp
 
@@ -518,9 +570,10 @@ def _update_psi_from_j(
 
   psi_value = jnp.interp(geo.rho_norm, geo.rho_hires_norm, psi_hires)
 
-  psi = cell_variable.CellVariable(
+  psi = cell_variable.CellVariable.of(
       value=psi_value,
       dr=geo.drho_norm,
+      left_face_grad_constraint=jnp.array(0.0),
       right_face_grad_constraint=psi_grad_constraint,
   )
 
@@ -568,10 +621,12 @@ def _init_psi_and_current(
   Returns:
     Refined core profiles.
   """
+  # TODO: Calculate psi on the inner and outer sides.
   # Retrieving psi from the profile conditions.
   if dynamic_runtime_params_slice.profile_conditions.psi is not None:
-    psi = cell_variable.CellVariable(
+    psi = cell_variable.CellVariable.of(
         value=dynamic_runtime_params_slice.profile_conditions.psi,
+        left_face_grad_constraint=jnp.array(0.0),
         right_face_grad_constraint=_calculate_psi_grad_constraint(
             dynamic_runtime_params_slice,
             geo,
@@ -594,8 +649,9 @@ def _init_psi_and_current(
     # psi is already provided from a numerical equilibrium, so no need to
     # first calculate currents. However, non-inductive currents are still
     # calculated and used in current diffusion equation.
-    psi = cell_variable.CellVariable(
+    psi = cell_variable.CellVariable.of(
         value=geo.psi_from_Ip,
+        left_face_grad_constraint=jnp.array(0.0),
         right_face_grad_constraint=_calculate_psi_grad_constraint(
             dynamic_runtime_params_slice,
             geo,
@@ -685,12 +741,17 @@ def initial_core_profiles(
 
   # The later calculation needs core profiles.
   # So initialize these quantities with zeros.
-  psidot = cell_variable.CellVariable(
+  psidot = cell_variable.CellVariable.of(
       value=jnp.zeros_like(geo.rho),
       dr=geo.drho_norm,
+      left_face_grad_constraint=jnp.array(0.0),
+      right_face_grad_constraint=jnp.array(0.0),
   )
-  psi = cell_variable.CellVariable(
-      value=jnp.zeros_like(geo.rho), dr=geo.drho_norm
+  psi = cell_variable.CellVariable.of(
+      value=jnp.zeros_like(geo.rho),
+      dr=geo.drho_norm,
+      left_face_grad_constraint=jnp.array(0.0),
+      right_face_grad_constraint=jnp.array(0.0),
   )
   q_face = jnp.zeros_like(geo.rho_face)
   s_face = jnp.zeros_like(geo.rho_face)
@@ -866,72 +927,111 @@ def compute_boundary_conditions(
     each CellVariable in the state. This dict can in theory recursively replace
     values in a State object.
   """
-  Ti_bound_right = jax_utils.error_if_not_positive(  # pylint: disable=invalid-name
-      dynamic_runtime_params_slice.profile_conditions.Ti_bound_right,
-      'Ti_bound_right',
+  prof_conds = dynamic_runtime_params_slice.profile_conditions
+  plas_comp = dynamic_runtime_params_slice.plasma_composition
+
+  Ti_bound_left = _ensure_value_boundary_is_positive(
+      prof_conds.Ti_bound_left,
+      prof_conds.Ti_bound_left_is_grad,
+      'Ti_bound_left',
+  )
+  Ti_bound_right = _ensure_value_boundary_is_positive(
+      prof_conds.Ti_bound_right,
+      prof_conds.Ti_bound_right_is_grad,
+      'Ti_bound_right'
   )
 
-  Te_bound_right = jax_utils.error_if_not_positive(  # pylint: disable=invalid-name
-      dynamic_runtime_params_slice.profile_conditions.Te_bound_right,
-      'Te_bound_right',
+  Te_bound_left = _ensure_value_boundary_is_positive(
+      prof_conds.Te_bound_left,
+      prof_conds.Te_bound_left_is_grad,
+      'Te_bound_left',
+  )
+  Te_bound_right = _ensure_value_boundary_is_positive(
+      prof_conds.Te_bound_right,
+      prof_conds.Te_bound_right_is_grad,
+      'Te_bound_right'
   )
 
   ne = _get_ne(
       dynamic_runtime_params_slice,
       geo,
   )
+  ne_bound_left = ne.left_face_constraint
   ne_bound_right = ne.right_face_constraint
 
   # define ion profile based on (flat) Zeff and single assumed impurity
   # with Zimp. main ion limited to hydrogenic species for now.
   # Assume isotopic balance for DT fusion power. Solve for ni based on:
   # Zeff = (Zi * ni + Zimp**2 * nimp)/ne  ;  nimp*Zimp + ni*Zi = ne
-
-  dilution_factor_edge = physics.get_main_ion_dilution_factor(
-      dynamic_runtime_params_slice.plasma_composition.Zi,
-      dynamic_runtime_params_slice.plasma_composition.Zimp,
-      dynamic_runtime_params_slice.plasma_composition.Zeff_face[-1],
+  # This assumes that Zeff varies slowly across rho_norm, so that the
+  # gradient of ni and nimp are simply proportional to the gradient of ne.
+  dilution_factor_inner_edge = physics.get_main_ion_dilution_factor(
+      plas_comp.Zi,
+      plas_comp.Zimp,
+      plas_comp.Zeff_face[0],
   )
+  ni_bound_left = ne_bound_left * dilution_factor_inner_edge
+  nimp_bound_left = (
+      ne_bound_left - ni_bound_left * plas_comp.Zi
+  ) / plas_comp.Zimp
 
-  ni_bound_right = ne_bound_right * dilution_factor_edge
+  dilution_factor_outer_edge = physics.get_main_ion_dilution_factor(
+      plas_comp.Zi,
+      plas_comp.Zimp,
+      plas_comp.Zeff_face[-1],
+  )
+  ni_bound_right = ne_bound_right * dilution_factor_outer_edge
   nimp_bound_right = (
-      ne_bound_right
-      - ni_bound_right * dynamic_runtime_params_slice.plasma_composition.Zi
-  ) / dynamic_runtime_params_slice.plasma_composition.Zimp
+       ne_bound_right - ni_bound_right * plas_comp.Zi
+  ) / plas_comp.Zimp
 
   return {
       'temp_ion': dict(
-          left_face_grad_constraint=jnp.zeros(()),
-          right_face_grad_constraint=None,
+          left_face_constraint=jnp.array(Ti_bound_left),
+          left_face_constraint_is_grad=prof_conds.Ti_bound_left_is_grad,
           right_face_constraint=jnp.array(Ti_bound_right),
+          right_face_constraint_is_grad=prof_conds.Ti_bound_right_is_grad,
       ),
       'temp_el': dict(
-          left_face_grad_constraint=jnp.zeros(()),
-          right_face_grad_constraint=None,
+          left_face_constraint=jnp.array(Te_bound_left),
+          left_face_constraint_is_grad=prof_conds.Te_bound_left_is_grad,
           right_face_constraint=jnp.array(Te_bound_right),
+          right_face_constraint_is_grad=prof_conds.Te_bound_right_is_grad,
       ),
       'ne': dict(
-          left_face_grad_constraint=jnp.zeros(()),
-          right_face_grad_constraint=None,
+          left_face_constraint=jnp.array(ne_bound_left),
+          left_face_constraint_is_grad=prof_conds.ne_bound_left_is_grad,
           right_face_constraint=jnp.array(ne_bound_right),
+          right_face_constraint_is_grad=prof_conds.ne_bound_right_is_grad,
       ),
       'ni': dict(
-          left_face_grad_constraint=jnp.zeros(()),
-          right_face_grad_constraint=None,
+          left_face_constraint=jnp.array(ni_bound_left),
+          left_face_constraint_is_grad=prof_conds.ne_bound_left_is_grad,
           right_face_constraint=jnp.array(ni_bound_right),
+          right_face_constraint_is_grad=prof_conds.ne_bound_right_is_grad,
       ),
       'nimp': dict(
-          left_face_grad_constraint=jnp.zeros(()),
-          right_face_grad_constraint=None,
+          left_face_constraint=jnp.array(nimp_bound_left),
+          left_face_constraint_is_grad=prof_conds.ne_bound_left_is_grad,
           right_face_constraint=jnp.array(nimp_bound_right),
+          right_face_constraint_is_grad=prof_conds.ne_bound_right_is_grad,
       ),
       'psi': dict(
-          right_face_grad_constraint=_calculate_psi_grad_constraint(
+          right_face_constraint=_calculate_psi_grad_constraint(
               dynamic_runtime_params_slice,
               geo,
           ),
+          right_face_constraint_is_grad=True,
       ),
   }
+
+
+def _ensure_value_boundary_is_positive(bound: jax.Array, bound_is_grad: bool, name: str) -> jax.Array:
+  return jax_utils.error_if(
+      bound,
+      (jnp.min(bound) <= 0) & (~bound_is_grad),
+      name,
+  )
 
 
 # pylint: disable=invalid-name

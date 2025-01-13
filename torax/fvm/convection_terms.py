@@ -17,7 +17,6 @@
 Builds the convection terms of the discrete matrix equation.
 """
 
-import chex
 import jax
 from jax import numpy as jnp
 from torax import math_utils
@@ -125,92 +124,59 @@ def make_convection_terms(
     )
 
   # Boundary rows need to be special-cased.
-  #
-  # Check that the boundary conditions are well-posed.
-  # These checks are redundant with CellVariable.__post_init__, but including
-  # them here for readability because they're in important part of the logic
-  # of this function.
-  chex.assert_exactly_one_is_none(
-      var.left_face_grad_constraint, var.left_face_constraint
-  )
-
-  chex.assert_exactly_one_is_none(
-      var.right_face_grad_constraint, var.right_face_constraint
-  )
-
-  if var.left_face_constraint is not None:
+  def dirichlet_boundary(constraint, alpha, opp_alpha, right):
+    def lr(l, r):
+      return r if right else l
     # Dirichlet condition at leftmost face
     if dirichlet_mode == 'ghost':
-      mat_value = (
-          v_face[0] * (2.0 * left_alpha[0] - 1.0) - v_face[1] * right_alpha[0]
+      mat_value = lr(1, -1) * (
+          v_face[lr(0, -1)] * (2.0 * alpha[lr(0, -1)] - 1.0)
+          - v_face[lr(1, -2)] * opp_alpha[lr(0, -1)]
       ) / var.dr
       vec_value = (
-          2.0 * v_face[0] * (1.0 - left_alpha[0]) * var.left_face_constraint
+          lr(1, -1) * 2.0 * v_face[lr(0, -1)] * (1.0 - alpha[lr(0, -1)]) * constraint
       ) / var.dr
     elif dirichlet_mode == 'direct':
-      vec_value = v_face[0] * var.left_face_constraint / var.dr
-      mat_value = -v_face[1] * right_alpha[0]
+      mat_value = lr(-1, 1) * v_face[lr(1, -2)] * opp_alpha[lr(0, 1)] / var.dr
+      vec_value = lr(1, -1) * v_face[lr(0, -1)] * constraint / var.dr
     elif dirichlet_mode == 'semi-implicit':
-      vec_value = (
-          v_face[0] * (1.0 - left_alpha[0]) * var.left_face_constraint
+      mat_value = mat[lr(0, -1), lr(0, -1)]
+      vec_value = lr(1, -1) * (
+          v_face[lr(0, -1)] * (1.0 - alpha[lr(0, -1)]) * constraint
       ) / var.dr
-      mat_value = mat[0, 0]
-      print('left vec_value: ', vec_value)
     else:
       raise ValueError(dirichlet_mode)
-  else:
+    return mat_value, vec_value
+
+  def neumann_boundary(constraint, alpha, opp_alpha, right):
+    def lr(l, r):
+      return r if right else l
     # Gradient boundary condition at leftmost face
-    mat_value = (v_face[0] - right_alpha[0] * v_face[1]) / var.dr
-    vec_value = (
-        -v_face[0] * (1.0 - left_alpha[0]) * var.left_face_grad_constraint
-    )
+    mat_value = lr(1, -1) * (
+        v_face[lr(0, -1)] - v_face[lr(1, -2)] * opp_alpha[lr(0, -1)]
+    ) / var.dr
+    vec_value = -v_face[lr(0, -1)] * (1.0 - alpha[lr(0, -1)]) * constraint
     if neumann_mode == 'ghost':
       pass  # no adjustment needed
     elif neumann_mode == 'semi-implicit':
       vec_value /= 2.0
     else:
       raise ValueError(neumann_mode)
+    return mat_value, vec_value
 
+  mat_value, vec_value = jax.lax.cond(
+    var.left_face_constraint_is_grad,
+    lambda: neumann_boundary(var.left_face_constraint, left_alpha, right_alpha, False),
+    lambda: dirichlet_boundary(var.left_face_constraint, left_alpha, right_alpha, False)
+  )
   mat = mat.at[0, 0].set(mat_value)
   vec = vec.at[0].set(vec_value)
 
-  if var.right_face_constraint is not None:
-    # Dirichlet condition at rightmost face
-    if dirichlet_mode == 'ghost':
-      mat_value = (
-          v_face[-2] * left_alpha[-1]
-          + v_face[-1] * (1.0 - 2.0 * right_alpha[-1])
-      ) / var.dr
-      vec_value = (
-          -2.0
-          * v_face[-1]
-          * (1.0 - right_alpha[-1])
-          * var.right_face_constraint
-      ) / var.dr
-    elif dirichlet_mode == 'direct':
-      mat_value = v_face[-2] * left_alpha[-1] / var.dr
-      vec_value = -v_face[-1] * var.right_face_constraint / var.dr
-    elif dirichlet_mode == 'semi-implicit':
-      mat_value = mat[-1, -1]
-      vec_value = (
-          -(v_face[-1] * (1.0 - right_alpha[-1]) * var.right_face_constraint)
-          / var.dr
-      )
-    else:
-      raise ValueError(dirichlet_mode)
-  else:
-    # Gradient boundary condition at rightmost face
-    mat_value = -(v_face[-1] - v_face[-2] * left_alpha[-1]) / var.dr
-    vec_value = (
-        -v_face[-1] * (1.0 - right_alpha[-1]) * var.right_face_grad_constraint
-    )
-    if neumann_mode == 'ghost':
-      pass  # no adjustment needed
-    elif neumann_mode == 'semi-implicit':
-      vec_value /= 2.0
-    else:
-      raise ValueError(neumann_mode)
-
+  mat_value, vec_value = jax.lax.cond(
+    var.right_face_constraint_is_grad,
+    lambda: neumann_boundary(var.right_face_constraint, right_alpha, left_alpha, True),
+    lambda: dirichlet_boundary(var.right_face_constraint, right_alpha, left_alpha, True)
+  )
   mat = mat.at[-1, -1].set(mat_value)
   vec = vec.at[-1].set(vec_value)
 

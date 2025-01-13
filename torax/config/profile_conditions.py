@@ -42,12 +42,18 @@ class ProfileConditions(
 
   # Temperature boundary conditions at r=Rmin. If this is `None` the boundary
   # condition will instead be taken from `Ti` and `Te` at rhon=1.
+  Ti_bound_left: interpolated_param.TimeInterpolatedInput | None = 0.0
+  Ti_bound_left_is_grad: bool = True
   Ti_bound_right: interpolated_param.TimeInterpolatedInput | None = None
-  Te_bound_right: interpolated_param.TimeInterpolatedInput | None = None
+  Ti_bound_right_is_grad: bool = False
   # Prescribed or evolving values for temperature at different times.
   Ti: interpolated_param.InterpolatedVarTimeRhoInput = dataclasses.field(
       default_factory=lambda: {0: {0: 15.0, 1: 1.0}}
   )
+  Te_bound_left: interpolated_param.TimeInterpolatedInput | None = 0.0
+  Te_bound_left_is_grad: bool = True
+  Te_bound_right: interpolated_param.TimeInterpolatedInput | None = None
+  Te_bound_right_is_grad: bool = False
   Te: interpolated_param.InterpolatedVarTimeRhoInput = dataclasses.field(
       default_factory=lambda: {0: {0: 15.0, 1: 1.0}}
   )
@@ -81,7 +87,12 @@ class ProfileConditions(
   # be set to `False` and `ne_bound_right_is_fGW` will be set to `ne_is_fGW`.
   # If `ne_bound_right` is not `None` then `ne_bound_right_is_absolute` will be
   # set to `True`.
+  ne_bound_left: interpolated_param.TimeInterpolatedInput | None = 0.0
+  ne_bound_left_is_grad: bool = True
+  ne_bound_left_is_fGW: bool = False
+  ne_bound_left_is_absolute: bool = False
   ne_bound_right: interpolated_param.TimeInterpolatedInput | None = None
+  ne_bound_right_is_grad: bool = False
   ne_bound_right_is_fGW: bool = False
   ne_bound_right_is_absolute: bool = False
   # Internal boundary condition (pedestal)
@@ -101,33 +112,45 @@ class ProfileConditions(
   def _sanity_check_profile_boundary_conditions(
       self,
       values: interpolated_param.InterpolatedVarTimeRhoInput,
+      left_bound: interpolated_param.TimeInterpolatedInput | None,
+      right_bound: interpolated_param.TimeInterpolatedInput | None,
       value_name: str,
   ):
     """Check that the profile is defined at rho=1.0 for various cases."""
-    error_message = (
+    left_error_message = (
+      f'As no left boundary condition was set for {value_name}, the'
+      f' profile for {value_name} must include a rho_norm=0.0 boundary'
+      ' condition.'
+    )
+    right_error_message = (
         f'As no right boundary condition was set for {value_name}, the'
-        f' profile for {value_name} must include a rho=1.0 boundary'
+        f' profile for {value_name} must include a rho_norm=1.0 boundary'
         ' condition.'
     )
-    if not interpolated_param.rhonorm1_defined_in_timerhoinput(values):
-      raise ValueError(error_message)
+    if left_bound is None and not interpolated_param.rhonorm_defined_in_timerhoinput(values, 0.0):
+      raise ValueError(left_error_message)
+    if right_bound is None and not interpolated_param.rhonorm_defined_in_timerhoinput(values, 1.0):
+      raise ValueError(right_error_message)
 
   def __post_init__(self):
-    if self.Ti_bound_right is None:
-      self._sanity_check_profile_boundary_conditions(
-          self.Ti,
-          'Ti',
-      )
-    if self.Te_bound_right is None:
-      self._sanity_check_profile_boundary_conditions(
-          self.Te,
-          'Te',
-      )
-    if self.ne_bound_right is None:
-      self._sanity_check_profile_boundary_conditions(
-          self.ne,
-          'ne',
-      )
+    self._sanity_check_profile_boundary_conditions(
+        self.Ti,
+        self.Ti_bound_left,
+        self.Ti_bound_right,
+        'Ti',
+    )
+    self._sanity_check_profile_boundary_conditions(
+        self.Te,
+        self.Te_bound_left,
+        self.Te_bound_right,
+        'Te',
+    )
+    self._sanity_check_profile_boundary_conditions(
+        self.ne,
+        self.ne_bound_left,
+        self.ne_bound_right,
+        'ne',
+    )
 
   @override
   def make_provider(
@@ -175,7 +198,17 @@ class ProfileConditionsProvider(
 
   runtime_params_config: ProfileConditions
   Ip_tot: interpolated_param.InterpolatedVarSingleAxis
+  Ti: interpolated_param.InterpolatedVarTimeRho
+  Ti_bound_left: (
+      interpolated_param.InterpolatedVarSingleAxis
+      | interpolated_param.InterpolatedVarTimeRho
+  )
   Ti_bound_right: (
+      interpolated_param.InterpolatedVarSingleAxis
+      | interpolated_param.InterpolatedVarTimeRho
+  )
+  Te: interpolated_param.InterpolatedVarTimeRho
+  Te_bound_left: (
       interpolated_param.InterpolatedVarSingleAxis
       | interpolated_param.InterpolatedVarTimeRho
   )
@@ -183,11 +216,13 @@ class ProfileConditionsProvider(
       interpolated_param.InterpolatedVarSingleAxis
       | interpolated_param.InterpolatedVarTimeRho
   )
-  Ti: interpolated_param.InterpolatedVarTimeRho
-  Te: interpolated_param.InterpolatedVarTimeRho
   psi: interpolated_param.InterpolatedVarTimeRho | None
   ne: interpolated_param.InterpolatedVarTimeRho
   nbar: interpolated_param.InterpolatedVarSingleAxis
+  ne_bound_left: (
+      interpolated_param.InterpolatedVarSingleAxis
+      | interpolated_param.InterpolatedVarTimeRho
+  )
   ne_bound_right: (
       interpolated_param.InterpolatedVarSingleAxis
       | interpolated_param.InterpolatedVarTimeRho
@@ -208,11 +243,17 @@ class DynamicProfileConditions:
   """Prescribed values and boundary conditions for the core profiles."""
 
   Ip_tot: array_typing.ScalarFloat
-  Ti_bound_right: array_typing.ScalarFloat
-  Te_bound_right: array_typing.ScalarFloat
   # Temperature profiles defined on the cell grid.
-  Te: array_typing.ArrayFloat
   Ti: array_typing.ArrayFloat
+  Ti_bound_left: array_typing.ScalarFloat
+  Ti_bound_left_is_grad: bool
+  Ti_bound_right: array_typing.ScalarFloat
+  Ti_bound_right_is_grad: bool
+  Te: array_typing.ArrayFloat
+  Te_bound_left: array_typing.ScalarFloat
+  Te_bound_left_is_grad: bool
+  Te_bound_right: array_typing.ScalarFloat
+  Te_bound_right_is_grad: bool
   # If provided as array, Psi profile defined on the cell grid.
   psi: array_typing.ArrayFloat | None
   # Electron density profile on the cell grid.
@@ -220,7 +261,12 @@ class DynamicProfileConditions:
   normalize_to_nbar: bool
   nbar: array_typing.ScalarFloat
   ne_is_fGW: bool
+  ne_bound_left: array_typing.ScalarFloat
+  ne_bound_left_is_grad: bool
+  ne_bound_left_is_fGW: bool
+  ne_bound_left_is_absolute: bool
   ne_bound_right: array_typing.ScalarFloat
+  ne_bound_right_is_grad: bool
   ne_bound_right_is_fGW: bool
   ne_bound_right_is_absolute: bool
   set_pedestal: array_typing.ScalarBool

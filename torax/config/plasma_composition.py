@@ -141,7 +141,7 @@ class PlasmaComposition(
     )
 
   def __post_init__(self):
-    if not interpolated_param.rhonorm1_defined_in_timerhoinput(self.Zeff):
+    if not interpolated_param.rhonorm_defined_in_timerhoinput(self.Zeff, 1.0):
       logging.info("""
           Config input Zeff not directly defined at rhonorm=1.0.
           Zeff_face at rhonorm=1.0 set from constant values or constant extrapolation.

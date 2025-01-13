@@ -100,7 +100,7 @@ def circular_references() -> References:
   )
   # ground truth values copied from example executions using
   # array.astype(str),which allows fully lossless reloading
-  psi = fvm.cell_variable.CellVariable(
+  psi = fvm.cell_variable.CellVariable.of(
       value=jnp.array(
           np.array([
               5.20759356763185e-02,
@@ -130,6 +130,7 @@ def circular_references() -> References:
               6.41538565179961e01,
           ]).astype('float64')
       ),
+      left_face_grad_constraint=jnp.array(0.0),
       right_face_grad_constraint=jnp.array(47.64848792277505),
       dr=geo.drho_norm,
   )
@@ -255,7 +256,7 @@ def chease_references_Ip_from_chease() -> References:  # pylint: disable=invalid
   )
   # ground truth values copied from an example PINT execution using
   # array.astype(str),which allows fully lossless reloading
-  psi = fvm.cell_variable.CellVariable(
+  psi = fvm.cell_variable.CellVariable.of(
       value=jnp.array(
           np.array([
               2.82691562998223e-02,
@@ -285,6 +286,7 @@ def chease_references_Ip_from_chease() -> References:  # pylint: disable=invalid
               5.67944467049695e01,
           ]).astype('float64')
       ),
+      left_face_grad_constraint=jnp.array(0.0),
       right_face_grad_constraint=jnp.array(50.417485084359726),
       dr=geo.drho_norm,
   )
@@ -410,7 +412,7 @@ def chease_references_Ip_from_runtime_params() -> References:  # pylint: disable
   )
   # ground truth values copied from an example executions using
   # array.astype(str),which allows fully lossless reloading
-  psi = fvm.cell_variable.CellVariable(
+  psi = fvm.cell_variable.CellVariable.of(
       value=jnp.array(
           np.array([
               3.60277713715760e-02,
@@ -440,6 +442,7 @@ def chease_references_Ip_from_runtime_params() -> References:  # pylint: disable
               7.23819741685979e01,
           ]).astype('float64')
       ),
+      left_face_grad_constraint=jnp.array(0.0),
       right_face_grad_constraint=jnp.array(64.25482269382654),
       dr=geo.drho_norm,
   )

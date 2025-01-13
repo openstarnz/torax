@@ -65,74 +65,6 @@ class FVMTest(torax_refs.ReferenceValueTest):
     np.testing.assert_allclose(face_grad_jax, references.psi_face_grad)
 
   @parameterized.parameters([
-      dict(references_getter=torax_refs.circular_references),
-      dict(references_getter=torax_refs.chease_references_Ip_from_chease),
-      dict(
-          references_getter=torax_refs.chease_references_Ip_from_runtime_params
-      ),
-  ])
-  def test_underconstrained(
-      self,
-      references_getter: Callable[[], torax_refs.References],
-  ):
-    """Test that CellVariable raises for underconstrained problems."""
-    references = references_getter()
-    geo = references.geometry_provider(
-        references.runtime_params.numerics.t_initial
-    )
-
-    # Use ref_config to configure size, so we can also use ref_geo
-    value = jnp.zeros(geo.torax_mesh.nx)
-    variable = cell_variable.CellVariable(value=value, dr=geo.drho)
-    # Underconstrain the left
-    with self.assertRaises(AssertionError):
-      dataclasses.replace(
-          variable,
-          left_face_constraint=None,
-          left_face_grad_constraint=None,
-      )
-    # Underconstrain the right
-    with self.assertRaises(AssertionError):
-      dataclasses.replace(
-          variable,
-          right_face_constraint=None,
-          right_face_grad_constraint=None,
-      )
-
-  @parameterized.parameters([
-      dict(references_getter=torax_refs.circular_references),
-      dict(references_getter=torax_refs.chease_references_Ip_from_chease),
-      dict(
-          references_getter=torax_refs.chease_references_Ip_from_runtime_params
-      ),
-  ])
-  def test_overconstrained(
-      self,
-      references_getter: Callable[[], torax_refs.References],
-  ):
-    """Test that CellVariable raises for overconstrained problems."""
-    references = references_getter()
-    geo = references.geometry_provider(
-        references.runtime_params.numerics.t_initial
-    )
-
-    # Use ref_config to configure size, so we can also use ref_geo
-    value = jnp.zeros(geo.torax_mesh.nx)
-    variable = cell_variable.CellVariable(value=value, dr=geo.drho)
-    # Overconstrain the left
-    with self.assertRaises(AssertionError):
-      dataclasses.replace(  # pytype: disable=wrong-arg-types  # dataclasses-replace-types
-          variable, left_face_constraint=1.0, right_face_constraint=2.0
-      )
-    # Overconstrain the right
-    with self.assertRaises(AssertionError):
-      dataclasses.replace(  # pytype: disable=wrong-arg-types  # dataclasses-replace-types
-          variable,
-          right_face_constraint=3.0,
-          right_face_grad_constraint=4.0,
-      )
-
-  @parameterized.parameters([
       dict(
           seed=20221114,
           references_getter=torax_refs.circular_references,
@@ -170,33 +102,45 @@ class FVMTest(torax_refs.ReferenceValueTest):
     # Make right cell different than left cell, so test catches bugs that
     # use the wrong end of the array
     value = value.at[-1].set(1)
-    variable = cell_variable.CellVariable(value=value, dr=geo.drho)
+    variable = cell_variable.CellVariable.of(
+      value=value,
+      dr=geo.drho,
+      left_face_grad_constraint=jnp.array(0.0),
+      right_face_grad_constraint=jnp.array(0.0),
+    )
 
     # Left side, face value constraint
     left_value = dataclasses.replace(  # pytype: disable=wrong-arg-types  # dataclasses-replace-types
-        variable, left_face_constraint=1.0, left_face_grad_constraint=None
+        variable, left_face_constraint=1.0, left_face_constraint_is_grad=False,
     )
     self.assertEqual(left_value.face_grad()[0], -1.0 / (0.5 * geo.drho))
 
     # Left side, face grad constraint
     left_grad = dataclasses.replace(  # pytype: disable=wrong-arg-types  # dataclasses-replace-types
-        variable, left_face_constraint=None, left_face_grad_constraint=1.0
+        variable, left_face_constraint=1.0, left_face_constraint_is_grad=True,
     )
     self.assertEqual(left_grad.face_grad()[0], 1.0)
+
+    # Check if face_value at left edge consistent with the grad constraint
+    expected_edge_face_value = (
+        left_grad.value[0]
+        - 0.5 * geo.drho * left_grad.left_face_grad_constraint
+    )
+    self.assertEqual(left_grad.face_value()[0], expected_edge_face_value)
 
     # Right side, face value constraint
     right_value = dataclasses.replace(  # pytype: disable=wrong-arg-types  # dataclasses-replace-types
         variable,
         right_face_constraint=2.0,
-        right_face_grad_constraint=None,
+        right_face_constraint_is_grad=False,
     )
     self.assertEqual(right_value.face_grad()[-1], 1.0 / (0.5 * geo.drho))
 
     # Right side, face grad constraint
     right_grad = dataclasses.replace(  # pytype: disable=wrong-arg-types  # dataclasses-replace-types
         variable,
-        right_face_constraint=None,
-        right_face_grad_constraint=1.0,
+        right_face_constraint=1.0,
+        right_face_constraint_is_grad=True,
     )
     self.assertEqual(right_grad.face_grad()[-1], 1.0)
 
@@ -217,17 +161,17 @@ class FVMTest(torax_refs.ReferenceValueTest):
     num_faces = num_cells + 1
     right_boundary = jnp.array((1.0, -2.0))
     dr = jnp.array(1.0)
-    x_0 = cell_variable.CellVariable(
+    x_0 = cell_variable.CellVariable.of(
         value=jnp.zeros(num_cells),
         dr=dr,
-        right_face_grad_constraint=None,
-        right_face_constraint=right_boundary[0],
+        left_face_grad_constraint=jnp.array(0.0),
+        right_face_value_constraint=right_boundary[0],
     )
-    x_1 = cell_variable.CellVariable(
+    x_1 = cell_variable.CellVariable.of(
         value=jnp.zeros(num_cells),
         dr=dr,
-        right_face_grad_constraint=None,
-        right_face_constraint=right_boundary[1],
+        left_face_grad_constraint=jnp.array(0.0),
+        right_face_value_constraint=right_boundary[1],
     )
     x = (x_0, x_1)
     # Not deeply investigated, but dt = 1. seems unstable for explicit method.
@@ -317,17 +261,17 @@ class FVMTest(torax_refs.ReferenceValueTest):
     # the solver.
     for start in [0, 1]:
       # Make both x_0 and x_1 start at 0
-      x_0 = cell_variable.CellVariable(
+      x_0 = cell_variable.CellVariable.of(
           value=jnp.zeros(num_cells),
           dr=dx,
-          right_face_grad_constraint=None,
-          right_face_constraint=right_boundary,
+          left_face_grad_constraint=jnp.array(0.0),
+          right_face_value_constraint=right_boundary,
       )
-      x_1 = cell_variable.CellVariable(
+      x_1 = cell_variable.CellVariable.of(
           value=jnp.zeros(num_cells),
           dr=dx,
-          right_face_grad_constraint=None,
-          right_face_constraint=right_boundary,
+          left_face_grad_constraint=jnp.array(0.0),
+          right_face_value_constraint=right_boundary,
       )
       x = (x_0, x_1)
 
@@ -613,11 +557,11 @@ class FVMTest(torax_refs.ReferenceValueTest):
         use_pereverzev=False,
     )
     initial_right_boundary = jnp.array(0.0)
-    x_0 = cell_variable.CellVariable(
+    x_0 = cell_variable.CellVariable.of(
         value=jnp.zeros(num_cells),
         dr=jnp.array(1.0),
-        right_face_grad_constraint=None,
-        right_face_constraint=initial_right_boundary,
+        left_face_grad_constraint=jnp.array(0.0),
+        right_face_value_constraint=initial_right_boundary,
     )
     # Run with different theta_imp values.
     for theta_imp in [0.0, 0.5, 1.0]:
@@ -637,7 +581,7 @@ class FVMTest(torax_refs.ReferenceValueTest):
     # If we run with an updated boundary condition applied at time t=dt, then
     # we should get non-zero values from the implicit terms.
     final_right_boundary = jnp.array(1.0)
-    x_1 = dataclasses.replace(x_0, right_face_constraint=final_right_boundary)
+    x_1 = dataclasses.replace(x_0, right_face_constraint=final_right_boundary, right_face_constraint_is_grad=False)
     # However, the explicit terms (when theta_imp = 0), should still be all 0.
     x_new = implicit_solve_block.implicit_solve_block(
         dt=dt,
@@ -651,7 +595,7 @@ class FVMTest(torax_refs.ReferenceValueTest):
     np.testing.assert_allclose(x_new[0].value, 0.0)
     # x_new should still have the updated boundary conditions though.
     np.testing.assert_allclose(
-        x_new[0].right_face_constraint, final_right_boundary
+        x_new[0].right_face_value_constraint, final_right_boundary
     )
     # And when theta_imp is > 0, the values should be > 0.
     x_new = implicit_solve_block.implicit_solve_block(
@@ -766,11 +710,11 @@ class FVMTest(torax_refs.ReferenceValueTest):
     )
 
     initial_right_boundary = jnp.array(0.0)
-    x_0 = cell_variable.CellVariable(
+    x_0 = cell_variable.CellVariable.of(
         value=jnp.zeros(num_cells),
         dr=jnp.array(1.0),
-        right_face_grad_constraint=None,
-        right_face_constraint=initial_right_boundary,
+        left_face_grad_constraint=jnp.array(0.0),
+        right_face_value_constraint=initial_right_boundary,
     )
     core_profiles_t_plus_dt = core_profile_setters.initial_core_profiles(
         dynamic_runtime_params_slice=dynamic_runtime_params_slice,
@@ -818,7 +762,7 @@ class FVMTest(torax_refs.ReferenceValueTest):
           core_profiles_t_plus_dt=dataclasses.replace(
               core_profiles_t_plus_dt,
               temp_ion=dataclasses.replace(
-                  x_0, right_face_constraint=final_right_boundary
+                  x_0, right_face_constraint=final_right_boundary, right_face_constraint_is_grad=False,
               ),
           ),
           evolving_names=evolving_names,
@@ -839,7 +783,7 @@ class FVMTest(torax_refs.ReferenceValueTest):
           core_profiles_t_plus_dt=dataclasses.replace(
               core_profiles_t_plus_dt,
               temp_ion=dataclasses.replace(
-                  x_0, right_face_constraint=final_right_boundary
+                  x_0, right_face_constraint=final_right_boundary, right_face_constraint_is_grad=False,
               ),
           ),
           x_new_guess_vec=x_0.value,
