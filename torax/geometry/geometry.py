@@ -1515,6 +1515,7 @@ def build_standard_geometry(
   drho_norm = float(rho_norm_intermediate[-1]) / intermediate.n_rho
   # normalized grid
   mesh = Grid1D.construct(nx=intermediate.n_rho, dx=drho_norm)
+  # TODO: Also use rho_i
   rho_b = rho_intermediate[-1]  # radius denormalization constant
   # helper variables for mesh cells and faces
   rho_face_norm = mesh.face_centers
@@ -1525,6 +1526,7 @@ def build_standard_geometry(
   rho_hires_norm = np.linspace(
       0, 1, intermediate.n_rho * intermediate.hires_fac
   )
+  # TODO: Don't use rho_b
   rho_hires = rho_hires_norm * rho_b
 
   rhon_interpolation_func = lambda x, y: np.interp(x, rho_norm_intermediate, y)

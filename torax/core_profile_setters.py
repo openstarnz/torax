@@ -234,6 +234,8 @@ def _updated_ion_density(
       Zi, Zimp, Zeff_face[-1]
   )
 
+  # Assume that Zeff varies slowly across the plasma, so that the gradient of
+  # ni and nimp are simply proportional to the gradient of ne
   ni = cell_variable.CellVariable(
       value=ne.value * dilution_factor,
       dr=geo.drho_norm,
