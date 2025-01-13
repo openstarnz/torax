@@ -1611,6 +1611,7 @@ def build_standard_geometry(
       geometry_type=intermediate.geometry_type.value,
       drho_norm=np.asarray(drho_norm),
       torax_mesh=mesh,
+      rho_i=np.array(0.0),  # TODO: Get actual inner radius
       rho_b=rho_b,
       Rmaj=intermediate.Rmaj,
       Rmin=intermediate.Rmin,
