@@ -124,7 +124,7 @@ class PostProcessingTest(parameterized.TestCase):
       return cell_variable.CellVariable.of(
           value=value * np.ones_like(self.geo.rho_norm),
           left_face_grad_constraint=jnp.zeros(()),
-          right_face_constraint=jnp.array(value),
+          right_face_value_constraint=jnp.array(value),
           dr=self.geo.drho_norm,
       )
 
