@@ -1493,7 +1493,7 @@ def build_standard_geometry(
   psi_from_Ip[-1] = psi_from_Ip[-2] + (
       16 * constants.CONSTANTS.mu0 * np.pi**3 * (np.pi * intermediate.rho[-1] ** 2)
   ) * intermediate.Ip_profile[-1] / (
-      g2g3_over_rhon[-1] * (intermediate.G[1:] * intermediate.Rmaj)
+      g2g3_over_rhon[-1] * (intermediate.G[-1] * intermediate.Rmaj)
   ) * (
       rho_norm_intermediate[-1] - rho_norm_intermediate[-2]
   )
