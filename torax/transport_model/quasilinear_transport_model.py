@@ -277,13 +277,13 @@ class QuasilinearTransportModel(transport_model.TransportModel):
     # For small density gradients or up-gradient transport, set pure effective
     # convection. Otherwise pure effective diffusion.
     def DVeff_approach() -> tuple[jax.Array, jax.Array]:
-      # The geo.rho_b is to unnormalize the face_grad.
+      # The geo.delta_rho is to unnormalize the face_grad.
       Deff = -pfe_SI / (
-          core_profiles.ne.face_grad() * geo.g1_over_vpr2_face * geo.rho_b
+          core_profiles.ne.face_grad() * geo.g1_over_vpr2_face * geo.delta_rho
           + constants.eps
       )
       Veff = pfe_SI / (
-          core_profiles.ne.face_value() * geo.g0_over_vpr_face * geo.rho_b
+          core_profiles.ne.face_value() * geo.g0_over_vpr_face * geo.delta_rho
       )
       Deff_mask = (
           ((pfe >= 0) & (quasilinear_inputs.lref_over_lne >= 0))
@@ -308,8 +308,8 @@ class QuasilinearTransportModel(transport_model.TransportModel):
           * d_face_el
           / gradient_reference_length
           * geo.g1_over_vpr2_face
-          * geo.rho_b**2
-      ) / (geo.g0_over_vpr_face * geo.rho_b)
+          * geo.delta_rho**2
+      ) / (geo.g0_over_vpr_face * geo.delta_rho)
       return d_face_el, v_face_el
 
     d_face_el, v_face_el = jax.lax.cond(

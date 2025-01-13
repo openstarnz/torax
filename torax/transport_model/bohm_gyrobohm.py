@@ -161,7 +161,7 @@ class BohmGyroBohmModel(transport_model.TransportModel):
             + jnp.abs(core_profiles.temp_el.face_grad()) * true_ne_face
         )
         * constants_module.CONSTANTS.keV2J
-        / geo.rho_b
+        / geo.delta_rho
     )
 
     # Gyrobohm term of heat transport
@@ -170,7 +170,7 @@ class BohmGyroBohmModel(transport_model.TransportModel):
         * jnp.sqrt(core_profiles.temp_el.face_value() * 1e3)
         / geo.B0**2
         * jnp.abs(core_profiles.temp_el.face_grad() * 1e3)
-        / geo.rho_b
+        / geo.delta_rho
     )
 
     chi_i_B = 2 * chi_e_B

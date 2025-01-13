@@ -138,6 +138,7 @@ class Geometry:
   geometry_type: int
   torax_mesh: Grid1D
   drho_norm: array_typing.ArrayFloat
+  rho_i: chex.Array
   rho_b: chex.Array
   Rmaj: chex.Array
   Rmin: chex.Array
@@ -196,7 +197,15 @@ class Geometry:
         and not jnp.allclose(self.Phi_face, jnp.pi * self.B0 * self.rho_face**2)
     ):
       raise ValueError('Phi_face does not match expected value.')
+    if (
+        not jax_utils.is_tracer(self.rho_b) and not jax_utils.is_tracer(self.rho_i)
+        and not self.rho_b > self.rho_i >= 0
+    ):
+      raise ValueError('rho_b must be greater than rho_i and both must be non-negative.')
 
+  # In general, this assumes a non-zero value of Phi at the inner boundary.
+  # This will be zero for Tokamak geometries, because the magnetic axis makes
+  # up the end of the domain, but not in geometries with a finite inner boundary.
   @property
   def Phi(self) -> chex.Array:
     return np.pi * self.B0 * self.rho ** 2
@@ -215,11 +224,11 @@ class Geometry:
 
   @property
   def rho_face(self) -> chex.Array:
-    return self.rho_face_norm * self.rho_b
+    return self.rho_face_norm * self.delta_rho + self.rho_i
 
   @property
   def rho(self) -> chex.Array:
-    return self.rho_norm * self.rho_b
+    return self.rho_norm * self.delta_rho + self.rho_i
 
   @property
   def rmid(self) -> chex.Array:
@@ -230,8 +239,12 @@ class Geometry:
     return (self.Rout_face - self.Rin_face) / 2
 
   @property
+  def delta_rho(self) -> chex.Array:
+    return self.rho_b - self.rho_i
+
+  @property
   def drho(self) -> chex.Array:
-    return self.drho_norm * self.rho_b
+    return self.drho_norm * self.delta_rho
 
   @property
   def Phib(self) -> chex.Array:
@@ -248,24 +261,19 @@ class Geometry:
 
   @property
   def g0_over_vpr_face(self) -> jax.Array:
-    return jnp.concatenate((
-        jnp.ones(1) / self.rho_b,  # correct value is 1/rho_b on-axis
-        self.g0_face[1:] / self.vpr_face[1:],  # avoid div by zero on-axis
-    ))
+    # The correct value is 1/rho_b on-axis, where there will be a division by zero.
+    # We don't need to worry about rho_i because this will only happen if rho_i is zero.
+    return jnp.nan_to_num(self.g0_face / self.vpr_face, nan=1/self.rho_b)
 
   @property
   def g1_over_vpr_face(self) -> jax.Array:
-    return jnp.concatenate((
-        jnp.zeros(1),  # correct value is zero on-axis
-        self.g1_face[1:] / self.vpr_face[1:],  # avoid div by zero on-axis
-    ))
+    # Correct value is zero on-axis
+    return jnp.nan_to_num(self.g1_face / self.vpr_face, nan=0.0)
 
   @property
   def g1_over_vpr2_face(self) -> jax.Array:
-    return jnp.concatenate((
-        jnp.ones(1) / self.rho_b**2,  # correct value is 1/rho_b**2 on-axis
-        self.g1_face[1:] / self.vpr_face[1:] ** 2,  # avoid div by zero on-axis
-    ))
+    # Correct value is 1/rho_b**2 on-axis
+    return jnp.nan_to_num(self.g1_face / self.vpr_face ** 2, nan=1/self.rho_b**2)
 
   @property
   def z_magnetic_axis(self) -> chex.Numeric:
@@ -279,6 +287,7 @@ class GeometryProvider:
   geometry_type: int
   torax_mesh: Grid1D
   drho_norm: interpolated_param.InterpolatedVarSingleAxis
+  rho_i: interpolated_param.InterpolatedVarSingleAxis
   rho_b: interpolated_param.InterpolatedVarSingleAxis
   Rmaj: interpolated_param.InterpolatedVarSingleAxis
   Rmin: interpolated_param.InterpolatedVarSingleAxis
@@ -463,6 +472,7 @@ def build_circular_geometry(
     Rmin: float = 2.0,
     B0: float = 5.3,
     hires_fac: int = 4,
+    Rinner: float = 0.0,
 ) -> CircularAnalyticalGeometry:
   """Constructs a CircularAnalyticalGeometry.
 
@@ -481,6 +491,7 @@ def build_circular_geometry(
     B0: Toroidal magnetic field on axis [T]
     hires_fac: Grid refinement factor for poloidal flux <--> plasma current
       calculations.
+    Rinner: inner radius in meters
 
   Returns:
     A CircularAnalyticalGeometry instance.
@@ -492,14 +503,16 @@ def build_circular_geometry(
   mesh = Grid1D.construct(nx=n_rho, dx=drho_norm)
   # toroidal flux coordinate (rho) at boundary (last closed flux surface)
   rho_b = np.asarray(Rmin)
+  rho_i = np.asarray(Rinner)
+  delta_rho = rho_b - rho_i
 
   # normalized and unnormalized toroidal flux coordinate (rho)
   # on face and cell grids. See fvm documentation and paper for details on
   # face and cell grids.
   rho_face_norm = mesh.face_centers
   rho_norm = mesh.cell_centers
-  rho_face = rho_face_norm * rho_b
-  rho = rho_norm * rho_b
+  rho_face = rho_face_norm * delta_rho + rho_i
+  rho = rho_norm * delta_rho + rho_i
 
   Rmaj = np.array(Rmaj)
   B0 = np.array(B0)
@@ -507,8 +520,9 @@ def build_circular_geometry(
   # Elongation profile.
   # Set to be a linearly increasing function from 1 to elongation_LCFS, which
   # is the elongation value at the last closed flux surface, set in config.
-  elongation = 1 + rho_norm * (elongation_LCFS - 1)
-  elongation_face = 1 + rho_face_norm * (elongation_LCFS - 1)
+  elongation_FCFS = 1.0 + rho_i * (elongation_LCFS - 1) / rho_b
+  elongation = elongation_FCFS + rho_norm * (elongation_LCFS - elongation_FCFS)
+  elongation_face = elongation_FCFS + rho_face_norm * (elongation_LCFS - elongation_FCFS)
 
   # Volume in elongated circular geometry is given by:
   # V = 2*pi^2*R*rho^2*elongation
@@ -520,25 +534,22 @@ def build_circular_geometry(
   area_face = np.pi * rho_face**2 * elongation_face
 
   # V' = dV/drnorm for volume integrations
-  # \nabla V = 4*pi^2*R*rho*elongation
-  #   + V * (elongation_param - 1) / elongation / rho_b
-  # vpr = \nabla V * rho_b
-  vpr = 4 * np.pi**2 * Rmaj * rho * elongation * rho_b + volume / elongation * (
-      elongation_LCFS - 1
-  )
-  vpr_face = (
-      4 * np.pi**2 * Rmaj * rho_face * elongation_face * rho_b
-      + volume_face / elongation_face * (elongation_LCFS - 1)
-  )
-  # pylint: disable=invalid-name
+  def calc_vpr(rho_, elongation_, volume_):
+    return (
+        4 * np.pi**2 * Rmaj * rho_ * delta_rho * elongation_
+        + volume_ * (elongation_LCFS - elongation_FCFS) / elongation_
+    )
+  vpr = calc_vpr(rho, elongation, volume)
+  vpr_face = calc_vpr(rho_face, elongation_face, volume_face)
+
   # S' = dS/drnorm for area integrals on cell grid
-  spr_cell = 2 * np.pi * rho * elongation * rho_b + area / elongation * (
-      elongation_LCFS - 1
-  )
-  spr_face = (
-      2 * np.pi * rho_face * elongation_face * rho_b
-      + area_face / elongation_face * (elongation_LCFS - 1)
-  )
+  def calc_spr(rho_, elongation_, area_):
+    return (
+        2 * np.pi * rho_ * elongation_ * delta_rho
+        + area_ * (elongation_LCFS - elongation_FCFS) / elongation_
+    )
+  spr_cell = calc_spr(rho, elongation, area)
+  spr_face = calc_spr(rho_face, elongation_face, area_face)
 
   delta_face = np.zeros(len(rho_face))
 
@@ -546,12 +557,12 @@ def build_circular_geometry(
   # With circular geometry approximation.
 
   # g0: <\nabla V>
-  g0 = vpr / rho_b
-  g0_face = vpr_face / rho_b
+  g0 = vpr / delta_rho
+  g0_face = vpr_face / delta_rho
 
   # g1: <(\nabla V)^2>
-  g1 = vpr**2 / rho_b**2
-  g1_face = vpr_face**2 / rho_b**2
+  g1 = vpr**2 / delta_rho**2
+  g1_face = vpr_face**2 / delta_rho**2
 
   # g2: <(\nabla V)^2 / R^2>
   g2 = g1 / Rmaj**2
@@ -586,7 +597,7 @@ def build_circular_geometry(
   # manipulations. Needed if psi is initialized from plasma current, which is
   # the only option for ad-hoc circular geometry.
   rho_hires_norm = np.linspace(0, 1, n_rho * hires_fac)
-  rho_hires = rho_hires_norm * rho_b
+  rho_hires = rho_hires_norm * delta_rho + rho_i
 
   Rout = Rmaj + rho
   Rout_face = Rmaj + rho_face
@@ -601,15 +612,9 @@ def build_circular_geometry(
   area_hires = np.pi * rho_hires**2 * elongation_hires
 
   # V' = dV/drnorm for volume integrations on hires grid
-  vpr_hires = (
-      4 * np.pi**2 * Rmaj * rho_hires * elongation_hires * rho_b
-      + volume_hires / elongation_hires * (elongation_LCFS - 1)
-  )
+  vpr_hires = calc_vpr(rho_hires, elongation_hires, volume_hires)
   # S' = dS/drnorm for area integrals on hires grid
-  spr_hires = (
-      2 * np.pi * rho_hires * elongation_hires * rho_b
-      + area_hires / elongation_hires * (elongation_LCFS - 1)
-  )
+  spr_hires = calc_spr(rho_hires, elongation_hires, area_hires)
 
   g3_hires = 1 / (Rmaj**2 * (1 - (rho_hires / Rmaj) ** 2) ** (3.0 / 2.0))
   F_hires = np.ones(len(rho_hires)) * B0 * Rmaj
@@ -1440,6 +1445,7 @@ def build_standard_geometry(
   """
 
   # Toroidal flux coordinates
+  # TODO: Account for the inner surface
   rho_intermediate = np.sqrt(intermediate.Phi / (np.pi * intermediate.B))
   rho_norm_intermediate = rho_intermediate / rho_intermediate[-1]
 
