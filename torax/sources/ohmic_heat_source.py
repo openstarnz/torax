@@ -86,36 +86,13 @@ def calc_psidot(
       * consts.mu0
       * 16
       * jnp.pi**2
-      * geo.Phib**2
-      / geo.F**2
+      * (jnp.pi * geo.rho_b**2)**2
+      / (geo.G * geo.Rmaj)**2
   )
   # Calculate diffusion term coefficient
   d_face_psi = geo.g2g3_over_rhon_face
-  # Add phibdot terms to poloidal flux convection
-  v_face_psi = (
-      -8.0
-      * jnp.pi**2
-      * consts.mu0
-      * geo.Phibdot
-      * geo.Phib
-      * sigma_face
-      * geo.rho_face_norm**2
-      / geo.F_face**2
-  )
 
-  # Add effective phibdot poloidal flux source term
-  ddrnorm_sigma_rnorm2_over_f2 = jnp.gradient(
-      sigma * geo.rho_norm**2 / geo.F**2, geo.rho_norm
-  )
-
-  psi_sources += (
-      -8.0
-      * jnp.pi**2
-      * consts.mu0
-      * geo.Phibdot
-      * geo.Phib
-      * ddrnorm_sigma_rnorm2_over_f2
-  )
+  v_face_psi = jnp.zeros_like(geo.rho_face_norm)
 
   diffusion_mat, diffusion_vec = diffusion_terms.make_diffusion_terms(
       d_face_psi, core_profiles.psi

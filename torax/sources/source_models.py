@@ -265,7 +265,7 @@ def sum_sources_psi(
         geo=geo,
     )
   mu0 = constants.CONSTANTS.mu0
-  prefactor = 8 * geo.vpr * jnp.pi**2 * geo.B0 * mu0 * geo.Phib / geo.F**2
+  prefactor = 8 * geo.vpr * jnp.pi**2 * mu0 * (jnp.pi * geo.rho_b**2) / (geo.G * geo.Rmaj)**2
   scale_source = lambda src: -src * prefactor
   return scale_source(total)
 
@@ -361,7 +361,7 @@ def calc_and_sum_sources_psi(
   total += j_bootstrap_profiles.j_bootstrap
 
   mu0 = constants.CONSTANTS.mu0
-  prefactor = 8 * geo.vpr * jnp.pi**2 * geo.B0 * mu0 * geo.Phib / geo.F**2
+  prefactor = 8 * geo.vpr * jnp.pi**2 * mu0 * (jnp.pi * geo.rho_b**2) / (geo.G * geo.Rmaj)**2
   scale_source = lambda src: -src * prefactor
 
   return (

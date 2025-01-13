@@ -485,8 +485,8 @@ def _calc_coeffs_full(
       * consts.mu0
       * 16
       * jnp.pi**2
-      * geo.Phib**2
-      / geo.F**2
+      * (jnp.pi * geo.rho_b**2)**2
+      / (geo.G * geo.Rmaj)**2
   )
   tic_psi = jnp.ones_like(toc_psi)
   toc_dens_el = jnp.ones_like(geo.vpr)
@@ -688,45 +688,7 @@ def _calc_coeffs_full(
   full_d_face_el += d_face_per_el
   full_v_face_el += v_face_per_el
 
-  # Add phibdot terms to heat transport convection
-  v_heat_face_ion += (
-      -3.0
-      / 4.0
-      * geo.Phibdot
-      / geo.Phib
-      * geo.rho_face_norm
-      * geo.vpr_face
-      * true_ni_face
-      * consts.keV2J
-  )
-
-  v_heat_face_el += (
-      -3.0
-      / 4.0
-      * geo.Phibdot
-      / geo.Phib
-      * geo.rho_face_norm
-      * geo.vpr_face
-      * true_ne_face
-      * consts.keV2J
-  )
-
-  # Add phibdot terms to particle transport convection
-  full_v_face_el += (
-      -1.0 / 2.0 * geo.Phibdot / geo.Phib * geo.rho_face_norm * geo.vpr_face
-  )
-
-  # Add phibdot terms to poloidal flux convection
-  v_face_psi = (
-      -8.0
-      * jnp.pi**2
-      * consts.mu0
-      * geo.Phibdot
-      * geo.Phib
-      * sigma_face
-      * geo.rho_face_norm**2
-      / geo.F_face**2
-  )
+  v_face_psi = jnp.zeros_like(geo.rho_face_norm)
 
   # Ion and electron heat sources.
   qei = source_models.qei_source.get_qei(
@@ -805,50 +767,6 @@ def _calc_coeffs_full(
       dynamic_runtime_params_slice.profile_conditions.set_pedestal,
       mask * dynamic_runtime_params_slice.numerics.largeValue_T,
       0.0,
-  )
-
-  # Add effective phibdot heat source terms
-
-  # second derivative of volume profile with respect to r_norm
-  vprpr_norm = jnp.gradient(geo.vpr, geo.rho_norm)
-
-  source_i += (
-      1.0
-      / 2.0
-      * vprpr_norm
-      * geo.Phibdot
-      / geo.Phib
-      * geo.rho_norm
-      * true_ni
-      * core_profiles.temp_ion.value
-      * consts.keV2J
-  )
-
-  source_e += (
-      1.0
-      / 2.0
-      * vprpr_norm
-      * geo.Phibdot
-      / geo.Phib
-      * geo.rho_norm
-      * true_ne
-      * core_profiles.temp_el.value
-      * consts.keV2J
-  )
-
-  # Add effective phibdot poloidal flux source term
-
-  ddrnorm_sigma_rnorm2_over_f2 = jnp.gradient(
-      sigma * geo.rho_norm**2 / geo.F**2, geo.rho_norm
-  )
-
-  source_psi += (
-      -8.0
-      * jnp.pi**2
-      * consts.mu0
-      * geo.Phibdot
-      * geo.Phib
-      * ddrnorm_sigma_rnorm2_over_f2
   )
 
   # Build arguments to solver based on which variables are evolving
