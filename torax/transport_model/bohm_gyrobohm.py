@@ -218,7 +218,7 @@ class BohmGyroBohmModel(transport_model.TransportModel):
         0.5
         * d_face_el[1:]
         * geo.area_face[1:] ** 2
-        * geo.rho_b
+        * geo.delta_face
         / (geo.volume_face[1:] * geo.vpr_face[1:]),
     ])
 
