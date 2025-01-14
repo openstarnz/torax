@@ -97,6 +97,7 @@ class PlotData:
   j_bootstrap: np.ndarray  # [MA/m^2]
   j_ecrh: np.ndarray  # [MA/m^2]
   generic_current_source: np.ndarray  # [MA/m^2]
+  external_current_source: np.ndarray  # [MA/m^2]
   q: np.ndarray  # Dimensionless
   s: np.ndarray  # Dimensionless
   chi_i: np.ndarray  # [m^2/s]
@@ -169,7 +170,8 @@ def load_data(filename: str) -> PlotData:
         output.JTOT: 1e6,  # A/m^2 to MA/m^2
         output.JOHM: 1e6,  # A/m^2 to MA/m^2
         output.J_BOOTSTRAP: 1e6,  # A/m^2 to MA/m^2
-        output.CORE_PROFILES_GENERIC_CURRENT: 1e6,  # A/m^2 to MA/m^2
+        output.CORE_PROFILES_EXTERNAL_CURRENT: 1e6,  # A/m^2 to MA/m^2
+        'generic_current_source': 1e6,  # A/m^2 to MA/m^2
         output.I_BOOTSTRAP: 1e6,  # A to MA
         output.IP_PROFILE_FACE: 1e6,  # A to MA
         'electron_cyclotron_source_j': 1e6,  # A/m^2 to MA/m^2
@@ -223,11 +225,14 @@ def load_data(filename: str) -> PlotData:
       j=core_profiles_dataset[output.JTOT].to_numpy(),
       johm=core_profiles_dataset[output.JOHM].to_numpy(),
       j_bootstrap=core_profiles_dataset[output.J_BOOTSTRAP].to_numpy(),
-      generic_current_source=core_profiles_dataset[
-          output.CORE_PROFILES_GENERIC_CURRENT
+      external_current_source=core_profiles_dataset[
+          output.CORE_PROFILES_EXTERNAL_CURRENT
       ].to_numpy(),
       j_ecrh=get_optional_data(
           core_sources_dataset, 'electron_cyclotron_source_j', 'cell'
+      ),
+      generic_current_source=get_optional_data(
+          core_sources_dataset, 'generic_current_source', 'cell'
       ),
       q=core_profiles_dataset[output.Q_FACE].to_numpy(),
       s=core_profiles_dataset[output.S_FACE].to_numpy(),
@@ -477,12 +482,15 @@ def format_plots(
       )
 
     lower_bound = ymin / 1.05 if ymin > 0 else ymin * 1.05
-    if cfg.ylim_min_zero:
-      ax.set_ylim([min(lower_bound, 0), ymax * 1.05])
-    else:
-      ax.set_ylim([lower_bound, ymax * 1.05])
 
-    ax.legend(fontsize=cfg.legend_fontsize)
+    # Guard against empty data
+    if ymax != 0 or ymin != 0:  # Check for meaningful data range
+      if cfg.ylim_min_zero:
+        ax.set_ylim([min(lower_bound, 0), ymax * 1.05])
+      else:
+        ax.set_ylim([lower_bound, ymax * 1.05])
+
+      ax.legend(fontsize=cfg.legend_fontsize)
 
 
 def get_rho(
