@@ -33,6 +33,7 @@ from torax.fvm import residual_and_loss
         'convection_dirichlet_mode',
         'convection_neumann_mode',
         'theta_imp',
+        'calculate_flux_boundary',
     ],
 )
 def implicit_solve_block(

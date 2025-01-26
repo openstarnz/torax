@@ -27,6 +27,7 @@ each step is expressed using a matrix multiply.
 from __future__ import annotations
 
 import dataclasses
+import functools
 from typing import TypeAlias
 
 import jax
@@ -35,6 +36,7 @@ from torax.fvm import block_1d_coeffs
 from torax.fvm import cell_variable
 from torax.fvm import convection_terms
 from torax.fvm import diffusion_terms
+from torax import jax_utils
 
 
 AuxiliaryOutput: TypeAlias = block_1d_coeffs.AuxiliaryOutput
@@ -45,6 +47,14 @@ Block1DCoeffsCallback: TypeAlias = block_1d_coeffs.Block1DCoeffsCallback
 FLUX_BOUNDARY_CALCULATION = False
 
 
+@functools.partial(
+    jax_utils.jit,
+    static_argnames=[
+      'convection_dirichlet_mode',
+      'convection_neumann_mode',
+      'calculate_flux_boundary',
+    ]
+)
 def calc_c(
     x: tuple[cell_variable.CellVariable, ...],
     coeffs: Block1DCoeffs,
@@ -93,6 +103,7 @@ def calc_c(
   zero_vec = jnp.zeros((num_cells))
   zero_block_vec = [zero_vec] * num_channels
 
+  unsupported_flux_boundary = jnp.array(False)
   if calculate_flux_boundary:
     # Solve for the value boundary conditions that ensure fluxes (or whatever chosen boundary condition) is correct
     # This is effectively a robin boundary solver
@@ -111,11 +122,13 @@ def calc_c(
     ) for i, x_i in enumerate(x)]
   else:
     for x_i in x:
-      if x_i.left_face_constraint_is_flux or x_i.right_face_constraint_is_flux:
-        raise ValueError(
-            'Flux boundary conditions are not supported without '
-            'calculate_flux_boundary=True.'
-        )
+      unsupported_flux_boundary = jnp.logical_or(
+          unsupported_flux_boundary,
+          jnp.logical_or(
+              x_i.left_face_constraint_is_flux,
+              x_i.right_face_constraint_is_flux
+          )
+      )
 
 
   # Make a matrix C and vector c that will accumulate contributions from
@@ -182,7 +195,11 @@ def calc_c(
   c_mat = jnp.block(c_mat)
   c = jnp.block(c)
 
-  return c_mat, c
+  message = 'Flux boundary conditions require calculate_flux_boundary to be set'
+  return (
+      jax_utils.error_if(c_mat, unsupported_flux_boundary, message),
+      jax_utils.error_if(c, unsupported_flux_boundary, message),
+  )
 
 
 def solve_for_bounds(right: bool, d_face: tuple[jax.Array], v_face: tuple[jax.Array], x: tuple[cell_variable.CellVariable, ...]) -> jax.Array:

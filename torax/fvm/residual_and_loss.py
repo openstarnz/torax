@@ -54,6 +54,7 @@ Block1DCoeffsCallback: TypeAlias = block_1d_coeffs.Block1DCoeffsCallback
         'convection_dirichlet_mode',
         'convection_neumann_mode',
         'theta_imp',
+        'calculate_flux_boundary',
     ],
 )
 def theta_method_matrix_equation(
