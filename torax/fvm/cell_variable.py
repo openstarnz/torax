@@ -59,8 +59,10 @@ class CellVariable:
   dr: jax.Array
   left_face_constraint: jax.Array
   left_face_constraint_is_grad: bool
+  left_face_constraint_is_flux: bool
   right_face_constraint: jax.Array
   right_face_constraint_is_grad: bool
+  right_face_constraint_is_flux: bool
   history: Optional[bool] = None
 
   @classmethod
@@ -91,7 +93,8 @@ class CellVariable:
       right_face_constraint_is_grad = False
     return cls(value=value, dr=dr,
         left_face_constraint=left_face_constraint, left_face_constraint_is_grad=left_face_constraint_is_grad,
-        right_face_constraint=right_face_constraint, right_face_constraint_is_grad=right_face_constraint_is_grad
+        right_face_constraint=right_face_constraint, right_face_constraint_is_grad=right_face_constraint_is_grad,
+        left_face_constraint_is_flux=False, right_face_constraint_is_flux=False,
     )
 
   def project(self, weights):

@@ -26,6 +26,7 @@ each step is expressed using a matrix multiply.
 
 from __future__ import annotations
 
+import dataclasses
 from typing import TypeAlias
 
 import jax
@@ -39,6 +40,9 @@ from torax.fvm import diffusion_terms
 AuxiliaryOutput: TypeAlias = block_1d_coeffs.AuxiliaryOutput
 Block1DCoeffs: TypeAlias = block_1d_coeffs.Block1DCoeffs
 Block1DCoeffsCallback: TypeAlias = block_1d_coeffs.Block1DCoeffsCallback
+
+
+FLUX_BOUNDARY_CALCULATION = True
 
 
 def calc_c(
@@ -84,6 +88,50 @@ def calc_c(
   zero_row_of_blocks = [zero_block] * num_channels
   zero_vec = jnp.zeros((num_cells))
   zero_block_vec = [zero_vec] * num_channels
+
+  def solve_for_bounds(right: bool):
+    idx = -1 if right else 0
+    diffusion_coeffs = [d_face[i][idx] for i in range(num_channels)]
+    convection_coeffs = [v_face[i][idx] for i in range(num_channels)]
+    cell_values = jnp.array([x_i.value[idx] for x_i in x])
+
+    constraints = []
+    for i, x_i in enumerate(x):
+      cons = x_i.right_face_constraint if right else x_i.left_face_constraint
+      is_grad = x_i.right_face_constraint_is_grad if right else x_i.left_face_constraint_is_grad
+      is_flux = x_i.right_face_constraint_is_flux if right else x_i.left_face_constraint_is_flux
+      constraints.append(cons)
+      if not is_flux and is_grad:
+        diffusion_coeffs[i] = 1.0
+        convection_coeffs[i] = 0.0
+      elif not is_flux:
+        diffusion_coeffs[i] = 0.0
+        convection_coeffs[i] = 1.0
+
+    delta = 2/x[0].dr * (1 if right else -1)
+    diffusion_coeffs = jnp.array(diffusion_coeffs)
+    convection_coeffs = jnp.array(convection_coeffs)
+    constraints = jnp.array(constraints)
+    sol = (constraints + delta * diffusion_coeffs * cell_values) / (convection_coeffs + delta * diffusion_coeffs)
+    return sol
+
+  if FLUX_BOUNDARY_CALCULATION:
+    # Solve for the value boundary conditions that ensure fluxes (or whatever chosen boundary condition) is correct
+    # This is effectively a robin boundary solver
+    # This is only an approximate solver, which solves for each term independently, by treating the diffusion
+    # and convection coefficients as constants.
+    left_bounds = solve_for_bounds(False)
+    right_bounds = solve_for_bounds(True)
+    x = [dataclasses.replace(
+        x_i,
+        left_face_constraint=left_bounds[i],
+        left_face_constraint_is_grad=False,
+        left_face_constraint_is_flux=False,
+        right_face_constraint=right_bounds[i],
+        right_face_constraint_is_grad=False,
+        right_face_constraint_is_flux=False,
+    ) for i, x_i in enumerate(x)]
+
 
   # Make a matrix C and vector c that will accumulate contributions from
   # diffusion, convection, and source terms.

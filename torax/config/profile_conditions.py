@@ -44,16 +44,20 @@ class ProfileConditions(
   # condition will instead be taken from `Ti` and `Te` at rhon=1.
   Ti_bound_left: interpolated_param.TimeInterpolatedInput | None = 0.0
   Ti_bound_left_is_grad: bool = True
+  Ti_bound_left_is_flux: bool = False
   Ti_bound_right: interpolated_param.TimeInterpolatedInput | None = None
   Ti_bound_right_is_grad: bool = False
+  Ti_bound_right_is_flux: bool = False
   # Prescribed or evolving values for temperature at different times.
   Ti: interpolated_param.InterpolatedVarTimeRhoInput = dataclasses.field(
       default_factory=lambda: {0: {0: 15.0, 1: 1.0}}
   )
   Te_bound_left: interpolated_param.TimeInterpolatedInput | None = 0.0
   Te_bound_left_is_grad: bool = True
+  Te_bound_left_is_flux: bool = False
   Te_bound_right: interpolated_param.TimeInterpolatedInput | None = None
   Te_bound_right_is_grad: bool = False
+  Te_bound_right_is_flux: bool = False
   Te: interpolated_param.InterpolatedVarTimeRhoInput = dataclasses.field(
       default_factory=lambda: {0: {0: 15.0, 1: 1.0}}
   )
@@ -249,13 +253,17 @@ class DynamicProfileConditions:
   Ti: array_typing.ArrayFloat
   Ti_bound_left: array_typing.ScalarFloat
   Ti_bound_left_is_grad: bool
+  Ti_bound_left_is_flux: bool
   Ti_bound_right: array_typing.ScalarFloat
   Ti_bound_right_is_grad: bool
+  Ti_bound_right_is_flux: bool
   Te: array_typing.ArrayFloat
   Te_bound_left: array_typing.ScalarFloat
   Te_bound_left_is_grad: bool
+  Te_bound_left_is_flux: bool
   Te_bound_right: array_typing.ScalarFloat
   Te_bound_right_is_grad: bool
+  Te_bound_right_is_flux: bool
   # If provided as array, Psi profile defined on the cell grid.
   psi: array_typing.ArrayFloat | None
   # Electron density profile on the cell grid.

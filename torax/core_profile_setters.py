@@ -47,8 +47,10 @@ def updated_ion_temperature(
     prof_conds.Ti,
     prof_conds.Ti_bound_left,
     prof_conds.Ti_bound_left_is_grad,
+    prof_conds.Ti_bound_left_is_flux,
     prof_conds.Ti_bound_right,
     prof_conds.Ti_bound_right_is_grad,
+    prof_conds.Ti_bound_right_is_flux,
     'Ti',
   )
 
@@ -64,8 +66,10 @@ def updated_electron_temperature(
     prof_conds.Te,
     prof_conds.Te_bound_left,
     prof_conds.Te_bound_left_is_grad,
+    prof_conds.Te_bound_left_is_flux,
     prof_conds.Te_bound_right,
     prof_conds.Te_bound_right_is_grad,
+    prof_conds.Te_bound_right_is_flux,
     'Te',
   )
 
@@ -75,8 +79,10 @@ def _updated_temperature(
     value: jax.Array,
     bound_left: jax.Array,
     bound_left_is_grad: bool,
+    bound_left_is_flux: bool,
     bound_right: jax.Array,
     bound_right_is_grad: bool,
+    bound_right_is_flux: bool,
     name: str,
 ) -> cell_variable.CellVariable:
   """Helper method for updated_ion_temperature and updated_electron_temperature."""
@@ -87,8 +93,10 @@ def _updated_temperature(
       dr=drho_norm,
       left_face_constraint=left_constraint,
       left_face_constraint_is_grad=bound_left_is_grad,
+      left_face_constraint_is_flux=bound_left_is_flux,
       right_face_constraint=right_constraint,
       right_face_constraint_is_grad=bound_right_is_grad,
+      right_face_constraint_is_flux=bound_right_is_flux,
   )
 
 
@@ -200,8 +208,10 @@ def _get_ne(
       dr=geo.drho_norm,
       left_face_constraint=ne_bound_left,
       left_face_constraint_is_grad=prof_conds.ne_bound_left_is_grad,
+      left_face_constraint_is_flux=False,
       right_face_constraint=ne_bound_right,
       right_face_constraint_is_grad=prof_conds.ne_bound_right_is_grad,
+      right_face_constraint_is_flux=False,
   )
   return ne
 
@@ -243,10 +253,12 @@ def _updated_ion_density(
           ne.left_face_constraint * dilution_factor_inner_edge
       ),
       left_face_constraint_is_grad=ne.left_face_constraint_is_grad,
+      left_face_constraint_is_flux=ne.left_face_constraint_is_flux,
       right_face_constraint=jnp.array(
           ne.right_face_constraint * dilution_factor_outer_edge
       ),
       right_face_constraint_is_grad=ne.right_face_constraint_is_grad,
+      right_face_constraint_is_flux=ne.right_face_constraint_is_flux,
   )
 
   nimp = cell_variable.CellVariable(
@@ -256,10 +268,12 @@ def _updated_ion_density(
           ne.left_face_constraint - ni.left_face_constraint * Zi
       ) / Zimp,
       left_face_constraint_is_grad=ne.left_face_constraint_is_grad,
+      left_face_constraint_is_flux=ne.left_face_constraint_is_flux,
       right_face_constraint=jnp.array(
           ne.right_face_constraint - ni.right_face_constraint * Zi
       ) / Zimp,
       right_face_constraint_is_grad=ne.right_face_constraint_is_grad,
+      right_face_constraint_is_flux=ne.right_face_constraint_is_flux,
   )
   return ni, nimp
 
@@ -989,14 +1003,18 @@ def compute_boundary_conditions(
       'temp_ion': dict(
           left_face_constraint=jnp.array(Ti_bound_left),
           left_face_constraint_is_grad=prof_conds.Ti_bound_left_is_grad,
+          left_face_constraint_is_flux=prof_conds.Ti_bound_left_is_flux,
           right_face_constraint=jnp.array(Ti_bound_right),
           right_face_constraint_is_grad=prof_conds.Ti_bound_right_is_grad,
+          right_face_constraint_is_flux=prof_conds.Ti_bound_right_is_flux,
       ),
       'temp_el': dict(
           left_face_constraint=jnp.array(Te_bound_left),
           left_face_constraint_is_grad=prof_conds.Te_bound_left_is_grad,
+          left_face_constraint_is_flux=prof_conds.Te_bound_left_is_flux,
           right_face_constraint=jnp.array(Te_bound_right),
           right_face_constraint_is_grad=prof_conds.Te_bound_right_is_grad,
+          right_face_constraint_is_flux=prof_conds.Te_bound_right_is_flux,
       ),
       'ne': dict(
           left_face_constraint=jnp.array(ne_bound_left),
