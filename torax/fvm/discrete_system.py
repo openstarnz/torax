@@ -89,39 +89,13 @@ def calc_c(
   zero_vec = jnp.zeros((num_cells))
   zero_block_vec = [zero_vec] * num_channels
 
-  def solve_for_bounds(right: bool):
-    idx = -1 if right else 0
-    diffusion_coeffs = [d_face[i][idx] for i in range(num_channels)]
-    convection_coeffs = [v_face[i][idx] for i in range(num_channels)]
-    cell_values = jnp.array([x_i.value[idx] for x_i in x])
-
-    constraints = []
-    for i, x_i in enumerate(x):
-      cons = x_i.right_face_constraint if right else x_i.left_face_constraint
-      is_grad = x_i.right_face_constraint_is_grad if right else x_i.left_face_constraint_is_grad
-      is_flux = x_i.right_face_constraint_is_flux if right else x_i.left_face_constraint_is_flux
-      constraints.append(cons)
-      if not is_flux and is_grad:
-        diffusion_coeffs[i] = 1.0
-        convection_coeffs[i] = 0.0
-      elif not is_flux:
-        diffusion_coeffs[i] = 0.0
-        convection_coeffs[i] = 1.0
-
-    delta = 2/x[0].dr * (1 if right else -1)
-    diffusion_coeffs = jnp.array(diffusion_coeffs)
-    convection_coeffs = jnp.array(convection_coeffs)
-    constraints = jnp.array(constraints)
-    sol = (constraints + delta * diffusion_coeffs * cell_values) / (convection_coeffs + delta * diffusion_coeffs)
-    return sol
-
   if FLUX_BOUNDARY_CALCULATION:
     # Solve for the value boundary conditions that ensure fluxes (or whatever chosen boundary condition) is correct
     # This is effectively a robin boundary solver
     # This is only an approximate solver, which solves for each term independently, by treating the diffusion
     # and convection coefficients as constants.
-    left_bounds = solve_for_bounds(False)
-    right_bounds = solve_for_bounds(True)
+    left_bounds = solve_for_bounds(False, d_face, v_face, x)
+    right_bounds = solve_for_bounds(True, d_face, v_face, x)
     x = [dataclasses.replace(
         x_i,
         left_face_constraint=left_bounds[i],
@@ -198,3 +172,40 @@ def calc_c(
   c = jnp.block(c)
 
   return c_mat, c
+
+
+def solve_for_bounds(right: bool, d_face: tuple[jax.Array], v_face: tuple[jax.Array], x: tuple[cell_variable.CellVariable, ...]) -> jax.Array:
+  idx = -1 if right else 0
+  diffusion_coeffs = jnp.array([d_i[idx] for d_i in d_face])
+  convection_coeffs = jnp.array([v_i[idx] for v_i in v_face])
+  cell_values = jnp.array([x_i.value[idx] for x_i in x])
+
+  constraints = []
+  for i, x_i in enumerate(x):
+    cons = x_i.right_face_constraint if right else x_i.left_face_constraint
+    is_grad = x_i.right_face_constraint_is_grad if right else x_i.left_face_constraint_is_grad
+    is_flux = x_i.right_face_constraint_is_flux if right else x_i.left_face_constraint_is_flux
+    constraints.append(cons)
+    diffusion_coeffs.at[i].set(jax.lax.cond(
+      is_flux,
+      lambda: diffusion_coeffs[i],
+      lambda: jax.lax.cond(
+        is_grad,
+        lambda: 1.0,
+        lambda: 0.0,
+      ),
+    ))
+    convection_coeffs.at[i].set(jax.lax.cond(
+      is_flux,
+      lambda: convection_coeffs[i],
+      lambda: jax.lax.cond(
+        is_grad,
+        lambda: 0.0,
+        lambda: 1.0,
+      ),
+    ))
+
+  delta = 2/x[0].dr * (1 if right else -1)
+  constraints = jnp.array(constraints)
+  sol = (constraints + delta * diffusion_coeffs * cell_values) / (convection_coeffs + delta * diffusion_coeffs)
+  return sol
