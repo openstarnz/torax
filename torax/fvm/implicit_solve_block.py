@@ -44,6 +44,7 @@ def implicit_solve_block(
     theta_imp: float = 1.0,
     convection_dirichlet_mode: str = 'ghost',
     convection_neumann_mode: str = 'ghost',
+    calculate_flux_boundary: bool = False,
 ) -> tuple[cell_variable.CellVariable, ...]:
   # pyformat: disable  # pyformat removes line breaks needed for readability
   """Runs one time step of an implicit solver on the equation defined by `coeffs`.
@@ -68,6 +69,9 @@ def implicit_solve_block(
       `dirichlet_mode` argument.
     convection_neumann_mode: See docstring of the `convection_terms` function,
       `neumann_mode` argument.
+    calculate_flux_boundary: If True, turn flux and gradient boundary conditions
+      into constraints on the value at the boundary.
+      This must be True if any boundary condition is a flux.
 
   Returns:
     x_new: Tuple, with x_new[i] giving channel i of x at the next time step
@@ -94,6 +98,7 @@ def implicit_solve_block(
           theta_imp=theta_imp,
           convection_dirichlet_mode=convection_dirichlet_mode,
           convection_neumann_mode=convection_neumann_mode,
+          calculate_flux_boundary=calculate_flux_boundary,
       )
   )
 

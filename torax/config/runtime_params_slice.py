@@ -126,6 +126,9 @@ class StaticRuntimeParamsSlice:
   current_eq: bool
   # Solve the density equation (n evolves over time)
   dens_eq: bool
+  # Should flux and gradient boundary conditions be turned into value boundary conditions
+  # This is an approximation, but allows flux boundary conditions to be used
+  calculate_flux_boundary: bool
 
   # Iterative reduction of dt if nonlinear step does not converge,
   # If nonlinear step does not converge, then the step is redone
@@ -141,6 +144,7 @@ class StaticRuntimeParamsSlice:
         self.el_heat_eq,
         self.current_eq,
         self.dens_eq,
+        self.calculate_flux_boundary,
         self.adaptive_dt,
     ))
 
@@ -196,6 +200,7 @@ def build_static_runtime_params_slice(
       el_heat_eq=runtime_params.numerics.el_heat_eq,
       current_eq=runtime_params.numerics.current_eq,
       dens_eq=runtime_params.numerics.dens_eq,
+      calculate_flux_boundary=runtime_params.numerics.calculate_flux_boundary,
       adaptive_dt=runtime_params.numerics.adaptive_dt,
   )
 

@@ -90,6 +90,9 @@ def predictor_corrector_method(
         convection_neumann_mode=(
             static_runtime_params_slice.stepper.convection_neumann_mode
         ),
+        calculate_flux_boundary=(
+            static_runtime_params_slice.calculate_flux_boundary
+        ),
     )
 
     return (x_new, coeffs_new.auxiliary_outputs)

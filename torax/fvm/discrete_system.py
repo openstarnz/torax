@@ -50,6 +50,7 @@ def calc_c(
     coeffs: Block1DCoeffs,
     convection_dirichlet_mode: str = 'ghost',
     convection_neumann_mode: str = 'ghost',
+    calculate_flux_boundary: bool = False,
 ) -> tuple[jax.Array, jax.Array]:
   """Calculate C and c such that F = C x + c.
 
@@ -64,6 +65,9 @@ def calc_c(
       `dirichlet_mode` argument.
     convection_neumann_mode: See docstring of the `convection_terms` function,
       `neumann_mode` argument.
+    calculate_flux_boundary: If True, turn flux and gradient boundary conditions
+      into constraints on the value at the boundary.
+      This must be True if any boundary condition is a flux.
 
   Returns:
     c_mat: matrix C, such that F = C x + c
@@ -89,7 +93,7 @@ def calc_c(
   zero_vec = jnp.zeros((num_cells))
   zero_block_vec = [zero_vec] * num_channels
 
-  if FLUX_BOUNDARY_CALCULATION:
+  if calculate_flux_boundary:
     # Solve for the value boundary conditions that ensure fluxes (or whatever chosen boundary condition) is correct
     # This is effectively a robin boundary solver
     # This is only an approximate solver, which solves for each term independently, by treating the diffusion
@@ -105,6 +109,13 @@ def calc_c(
         right_face_constraint_is_grad=False,
         right_face_constraint_is_flux=False,
     ) for i, x_i in enumerate(x)]
+  else:
+    for x_i in x:
+      if x_i.left_face_constraint_is_flux or x_i.right_face_constraint_is_flux:
+        raise ValueError(
+            'Flux boundary conditions are not supported without '
+            'calculate_flux_boundary=True.'
+        )
 
 
   # Make a matrix C and vector c that will accumulate contributions from

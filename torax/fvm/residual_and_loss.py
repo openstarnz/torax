@@ -65,6 +65,7 @@ def theta_method_matrix_equation(
     theta_imp: float = 1.0,
     convection_dirichlet_mode: str = 'ghost',
     convection_neumann_mode: str = 'ghost',
+    calculate_flux_boundary: bool = False,
 ) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
   """Returns the left-hand and right-hand sides of the theta method equation.
 
@@ -119,6 +120,9 @@ def theta_method_matrix_equation(
       `dirichlet_mode` argument.
     convection_neumann_mode: See docstring of the `convection_terms` function,
       `neumann_mode` argument.
+    calculate_flux_boundary: If True, turn flux and gradient boundary conditions
+      into constraints on the value at the boundary.
+      This must be True if any boundary condition is a flux.
 
   Returns:
     For the equation A x_new + a_vec = B x_old + b_vec. This function returns
@@ -161,6 +165,7 @@ def theta_method_matrix_equation(
       coeffs_new,
       convection_dirichlet_mode,
       convection_neumann_mode,
+      calculate_flux_boundary,
   )
 
   broadcasted = jnp.expand_dims(1 / (tc_out_new * tc_in_new), 1)
@@ -180,6 +185,7 @@ def theta_method_matrix_equation(
         coeffs_old,
         convection_dirichlet_mode,
         convection_neumann_mode,
+        calculate_flux_boundary,
     )
     broadcasted = jnp.expand_dims(1 / (tc_out_old * tc_in_new), 1)
     rhs_mat = right_transient + dt * theta_exp * broadcasted * c_mat_old
@@ -285,6 +291,7 @@ def theta_method_block_residual(
       theta_imp=static_runtime_params_slice.stepper.theta_imp,
       convection_dirichlet_mode=static_runtime_params_slice.stepper.convection_dirichlet_mode,
       convection_neumann_mode=static_runtime_params_slice.stepper.convection_neumann_mode,
+      calculate_flux_boundary=static_runtime_params_slice.calculate_flux_boundary,
   )
 
   lhs = jnp.dot(lhs_mat, x_new_guess_vec) + lhs_vec

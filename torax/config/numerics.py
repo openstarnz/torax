@@ -94,6 +94,10 @@ class Numerics(base.RuntimeParametersConfig):
   # location if n != neped
   largeValue_n: float = 2.0e8
 
+  # Convert flux and gradient boundary conditions to constraints on the value
+  # at the boundary. This must be True if any boundary condition is a flux.
+  calculate_flux_boundary: bool = False
+
   @override
   def make_provider(
       self, torax_mesh: geometry.Grid1D | None = None
