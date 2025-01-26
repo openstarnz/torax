@@ -59,12 +59,11 @@ class SimTest(sim_test_case.SimTestCase):
           0,
       ),
       # Tests implicit solver with theta=0.5 (Crank-Nicolson)
-      # Low tolerance since solver parameters are different
       (
           'test_crank_nicolson',
           'test_crank_nicolson.py',
-          ('temp_ion', 'temp_el'),
-          2e-1,
+          _ALL_PROFILES,
+          0,
       ),
       # Tests implicit solver with theta=1.0 (backwards Euler)
       (
