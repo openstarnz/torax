@@ -629,11 +629,11 @@ def _calc_coeffs_full(
 
   # Convection term
   # To maintaing quasineutrality, the electron particle convection and diffusion coefficients must be the same
-  ion_heat_convection = 5 / 2 * (
+  ion_heat_convection = -5 / 2 * (
       geo.g0_face * true_ni_face * v_face_el
       - d_face_el * geo.g1_over_vpr_face * core_profiles.ni.face_grad() * dynamic_runtime_params_slice.numerics.nref
   ) * consts.keV2J
-  el_heat_convection = 5 / 2 * (
+  el_heat_convection = -5 / 2 * (
       geo.g0_face * true_ne_face * v_face_el
       - d_face_el * geo.g1_over_vpr_face * core_profiles.ne.face_grad() * dynamic_runtime_params_slice.numerics.nref
   ) * consts.keV2J
