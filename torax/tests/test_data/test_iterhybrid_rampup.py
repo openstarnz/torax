@@ -188,7 +188,7 @@ CONFIG = {
     'stepper': {
         'stepper_type': 'newton_raphson',
         'predictor_corrector': True,
-        'corrector_steps': 10,
+        'corrector_steps': 20,
         # (deliberately) large heat conductivity for Pereverzev rule
         'chi_per': 30,
         # (deliberately) large particle diffusion for Pereverzev rule
