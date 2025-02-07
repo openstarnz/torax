@@ -140,6 +140,10 @@ class PlotData:
   ni_volume_avg: np.ndarray  # [10^20 m^-3]
   W_thermal_tot: np.ndarray  # [MJ]  # pylint: disable=invalid-name
   q95: np.ndarray  # Dimensionless
+  flux_temp_ion: np.ndarray
+  flux_temp_el: np.ndarray
+  flux_ni: np.ndarray
+  flux_ne: np.ndarray
 
 
 def load_data(filename: str) -> PlotData:
@@ -305,6 +309,10 @@ def load_data(filename: str) -> PlotData:
       W_thermal_tot=post_processed_outputs_dataset['W_thermal_tot'].to_numpy(),
       q95=post_processed_outputs_dataset['q95'].to_numpy(),
       t=time,
+      flux_temp_ion=post_processed_outputs_dataset['flux_temp_ion_face'].to_numpy(),
+      flux_temp_el=post_processed_outputs_dataset['flux_temp_el_face'].to_numpy(),
+      flux_ni=post_processed_outputs_dataset['flux_ni_face'].to_numpy(),
+      flux_ne=post_processed_outputs_dataset['flux_ne_face'].to_numpy(),
   )
 
 
