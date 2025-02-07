@@ -897,7 +897,8 @@ def calc_temp_flux(
   particle_flux = calc_particle_flux(geo, n, v_face, d_face)
   convective_flux = 5/2 * temp.face_value() * particle_flux
   diffusive_flux = -n.face_value() * chi_face * geo.g1_over_vpr_face * temp.face_grad()
-  return convective_flux + diffusive_flux
+  total_flux = convective_flux + diffusive_flux
+  return total_flux.at[0].set(total_flux[1]).at[-1].set(total_flux[-2])
 
 
 def calc_particle_flux(
