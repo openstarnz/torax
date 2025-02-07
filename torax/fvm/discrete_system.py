@@ -204,6 +204,7 @@ def calc_c(
 
 def solve_for_bounds(right: bool, d_face: tuple[jax.Array], v_face: tuple[jax.Array], x: tuple[cell_variable.CellVariable, ...]) -> jax.Array:
   idx = -1 if right else 0
+  inner_idx = -2 if right else 1
   if d_face is None:
     diffusion_coeffs = jnp.zeros((len(x),))
   else:
@@ -213,6 +214,7 @@ def solve_for_bounds(right: bool, d_face: tuple[jax.Array], v_face: tuple[jax.Ar
   else:
     convection_coeffs = jnp.array([v_i[idx] for v_i in v_face])
   cell_values = jnp.array([x_i.value[idx] for x_i in x])
+  inner_values = jnp.array([x_i.value[inner_idx] for x_i in x])
 
   constraints = []
   for i, x_i in enumerate(x):
@@ -242,4 +244,8 @@ def solve_for_bounds(right: bool, d_face: tuple[jax.Array], v_face: tuple[jax.Ar
   delta = 2/x[0].dr * (1 if right else -1)
   constraints = jnp.array(constraints)
   sol = (constraints + delta * diffusion_coeffs * cell_values) / (convection_coeffs + delta * diffusion_coeffs)
-  return sol
+  return jnp.where(
+      jnp.logical_and(convection_coeffs == 0.0, diffusion_coeffs == 0.0),
+      inner_values,
+      sol,
+  )
