@@ -31,6 +31,7 @@ from torax.config import runtime_params_slice
 from torax.fvm import block_1d_coeffs
 from torax.fvm import calc_coeffs
 from torax.fvm import cell_variable
+from torax.fvm import discrete_system
 from torax.fvm import implicit_solve_block
 from torax.fvm import residual_and_loss
 from torax.geometry import geometry
@@ -795,6 +796,56 @@ class FVMTest(torax_refs.ReferenceValueTest):
           pedestal_model=pedestal_model,
       )
       self.assertGreater(jnp.abs(jnp.sum(residual)), 0.0)
+
+  @parameterized.product(
+    d_face=[(1.0, 1.0), (1.0, 0.0), (1.0, 0.5)],
+    v_face=[(1.0, 1.0), (0.0, 1.0), (1.0, 0.5)],
+    left_face_constraint=[0.0, 1.0],
+    left_face_constraint_type=[0, 1, 2],
+    right_face_constraint=[0.0, 1.0],
+    right_face_constraint_type=[0, 1, 2],
+  )
+  def test_solve_for_bounds(self, d_face, v_face, left_face_constraint, left_face_constraint_type, right_face_constraint, right_face_constraint_type):
+    d_face = jnp.array(d_face)
+    v_face = jnp.array(v_face)
+    x = cell_variable.CellVariable(
+      value=jnp.array([1.0, 0.5]),
+      dr=jnp.array(0.5),
+      left_face_constraint=jnp.array(left_face_constraint),
+      left_face_constraint_is_grad=left_face_constraint_type == 1,
+      left_face_constraint_is_flux=left_face_constraint_type == 2,
+      right_face_constraint=jnp.array(right_face_constraint),
+      right_face_constraint_is_grad=right_face_constraint_type == 1,
+      right_face_constraint_is_flux=right_face_constraint_type == 2,
+    )
+    left_bound, = discrete_system.solve_for_bounds(False, (d_face,), (v_face,), (x,))
+    right_bound, = discrete_system.solve_for_bounds(True, (d_face,), (v_face,), (x,))
+    new_x = cell_variable.CellVariable(
+      value=jnp.array([1.0, 0.5]),
+      dr=jnp.array(0.5),
+      left_face_constraint=left_bound,
+      left_face_constraint_is_grad=False,
+      left_face_constraint_is_flux=False,
+      right_face_constraint=right_bound,
+      right_face_constraint_is_grad=False,
+      right_face_constraint_is_flux=False,
+    )
+
+    if left_face_constraint_type == 0:
+      actual_constraint = new_x.face_value()[0]
+    elif left_face_constraint_type == 1:
+      actual_constraint = new_x.face_grad()[0]
+    else:
+      actual_constraint = new_x.face_value()[0]*v_face[0] - d_face[0]*new_x.face_grad()[0]
+    self.assertAlmostEqual(left_face_constraint, actual_constraint)
+
+    if right_face_constraint_type == 0:
+      actual_constraint = new_x.face_value()[-1]
+    elif right_face_constraint_type == 1:
+      actual_constraint = new_x.face_grad()[-1]
+    else:
+      actual_constraint = new_x.face_value()[-1]*v_face[-1] - d_face[-1]*new_x.face_grad()[-1]
+    self.assertAlmostEqual(right_face_constraint, actual_constraint)
 
 
 if __name__ == '__main__':

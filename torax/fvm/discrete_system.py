@@ -225,7 +225,7 @@ def solve_for_bounds(right: bool, d_face: tuple[jax.Array], v_face: tuple[jax.Ar
       lambda: diffusion_coeffs[i],
       lambda: jax.lax.cond(
         is_grad,
-        lambda: 1.0,
+        lambda: -1.0,
         lambda: 0.0,
       ),
     ))
@@ -241,5 +241,5 @@ def solve_for_bounds(right: bool, d_face: tuple[jax.Array], v_face: tuple[jax.Ar
 
   delta = 2/x[0].dr * (1 if right else -1)
   constraints = jnp.array(constraints)
-  sol = (constraints + delta * diffusion_coeffs * cell_values) / (convection_coeffs + delta * diffusion_coeffs)
+  sol = (constraints - delta * diffusion_coeffs * cell_values) / (convection_coeffs - delta * diffusion_coeffs)
   return sol
