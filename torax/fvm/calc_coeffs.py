@@ -898,16 +898,7 @@ def calc_temp_flux(
   convective_flux = 5/2 * temp.face_value() * particle_flux
   diffusive_flux = -n.face_value() * chi_face * geo.g1_over_vpr_face * temp.face_grad()
   total_flux = convective_flux + diffusive_flux
-  total_flux = (total_flux.at[0].set(jnp.where(
-      temp.left_face_constraint_is_flux,
-      temp.left_face_constraint,
-      total_flux[0],
-  )).at[-1].set(jnp.where(
-      temp.right_face_constraint_is_flux,
-      temp.right_face_constraint,
-      total_flux[-1],
-  )))
-  return total_flux
+  return total_flux.at[0].set(total_flux[1]).at[-1].set(total_flux[-2])
 
 
 def calc_particle_flux(
@@ -917,14 +908,4 @@ def calc_particle_flux(
     d_face: jax.Array,
 ) -> jax.Array:
   """Calculate the particle flux, normalised to nref."""
-  total_flux = v_face * geo.g0_face * n.face_value() - d_face * geo.g1_over_vpr_face * n.face_grad()
-  total_flux = (total_flux.at[0].set(jnp.where(
-      n.left_face_constraint_is_flux,
-      n.left_face_constraint,
-      total_flux[0],
-  )).at[-1].set(jnp.where(
-      n.right_face_constraint_is_flux,
-      n.right_face_constraint,
-      total_flux[-1],
-  )))
-  return total_flux
+  return v_face * geo.g0_face * n.face_value() - d_face * geo.g1_over_vpr_face * n.face_grad()
