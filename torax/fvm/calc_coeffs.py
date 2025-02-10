@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import sys
 
 import jax
 import jax.numpy as jnp
@@ -848,6 +849,10 @@ def _calc_coeffs_full(
       source_cell=source_cell,
       auxiliary_outputs=(implicit_source_profiles, transport_coeffs),
   )
+
+  def debug_print_to_stderr(fmt: str, *args):
+    jax.debug.callback(functools.partial(lambda fmt, *args: sys.stderr.write(fmt.format(*args) + '\n'), fmt), *args)
+  debug_print_to_stderr("D: {}, V: {}, D/V: {}, Source 1: {}, Source 2: {}", full_d_face_el, full_v_face_el, full_d_face_el/full_v_face_el, source_ne, source_mat_nn)
 
   return coeffs
 
