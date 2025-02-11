@@ -849,12 +849,14 @@ def _calc_coeffs_full(
       source_cell=source_cell,
       auxiliary_outputs=(implicit_source_profiles, transport_coeffs),
   )
-
-  def debug_print_to_stderr(fmt: str, *args):
-    jax.debug.callback(functools.partial(lambda fmt, *args: sys.stderr.write(fmt.format(*args) + '\n'), fmt), *args)
-  debug_print_to_stderr("D: {}, V: {}, D/V: {}, Source 1: {}, Source 2: {}", full_d_face_el, full_v_face_el, full_d_face_el/full_v_face_el, source_ne, source_mat_nn)
+  # debug_print_to_stderr("D: {}, V: {}, D/V: {}, Source 1: {}, Source 2: {}", full_d_face_el, full_v_face_el, full_d_face_el/full_v_face_el, source_ne, source_mat_nn)
+  debug_print_to_stderr("D heat: {}, V heat: {}", full_chi_face_el, v_heat_face_el)
 
   return coeffs
+
+
+def debug_print_to_stderr(fmt: str, *args):
+  jax.debug.callback(functools.partial(lambda fmt, *args: sys.stderr.write(fmt.format(*args) + '\n'), fmt), *args)
 
 
 @functools.partial(
@@ -913,4 +915,5 @@ def calc_particle_flux(
     d_face: jax.Array,
 ) -> jax.Array:
   """Calculate the particle flux, normalised to nref."""
+  debug_print_to_stderr("V: {}, D: {}, g0: {}, n: {}, g1: {}, vpr: {}, face grad: {}", v_face, d_face, geo.g0_face, n.face_value(), geo.g1_face, geo.vpr, n.face_grad())
   return v_face * geo.g0_face * n.face_value() - d_face * geo.g1_over_vpr_face * n.face_grad()

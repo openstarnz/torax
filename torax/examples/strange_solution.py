@@ -1,14 +1,20 @@
 CONFIG = {
     'runtime_params': {
         'profile_conditions': {
+            'Te_bound_right': 1.0,
+            'Te': {0.0: 15.0, 1.0: 1.0},
+
+            'Ti_bound_right': 1.0,
+            'Ti': {0.0: 15.0, 1.0: 1.0},
+
             'ne_bound_right': 1.0,
             'ne': {0.0: 1.5, 1.0: 1.0},
             'set_pedestal': False,
         },
         # Only solve the density equation
         'numerics': {
-            'ion_heat_eq': False,
-            'el_heat_eq': False,
+            'ion_heat_eq': True,
+            'el_heat_eq': True,
             'current_eq': False,
             'dens_eq': True,
             't_final': 5.0,
