@@ -106,6 +106,8 @@ SPR_FACE = "spr_face"
 IP_PROFILE_FACE = "Ip_profile_face"
 G0 = "g0"
 G1 = "g1"
+G0_FACE = "g0_face"
+G1_FACE = "g1_face"
 
 # Coordinates.
 RHO_FACE_NORM = "rho_face_norm"
@@ -462,6 +464,8 @@ class StateHistory:
         SPR_FACE: xr.DataArray(geo.spr_face, dims=[RHO_FACE], name=SPR_FACE),
         G0: xr.DataArray(geo.g0, dims=[RHO_CELL], name=G0),
         G1: xr.DataArray(geo.g1, dims=[RHO_CELL], name=G1),
+        G0_FACE: xr.DataArray(geo.g0_face, dims=[RHO_FACE], name=G0_FACE),
+        G1_FACE: xr.DataArray(geo.g1_face, dims=[RHO_FACE], name=G1_FACE),
     }
     coords = {
         TIME: time,
