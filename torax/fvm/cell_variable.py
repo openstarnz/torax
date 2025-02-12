@@ -166,6 +166,7 @@ class CellVariable:
     def constrained_grad(
         constraint: jax.Array,
         constraint_is_grad: bool,
+        constraint_is_flux: bool,
         cell: jax.Array,
         right: bool,
     ) -> jax.Array:
@@ -190,17 +191,27 @@ class CellVariable:
         else:
           dx = x[1] - x[0]
       unconstrained_grad = (1.0 - 2.0 * right) * (cell - constraint) / (0.5 * dx)
-      return jax.lax.cond(constraint_is_grad, lambda: constraint, lambda: unconstrained_grad)
+      return jax.lax.cond(
+          constraint_is_flux,
+          lambda: jnp.array(0.0),
+          lambda: jax.lax.cond(
+              constraint_is_grad,
+              lambda: constraint,
+              lambda: unconstrained_grad,
+        ),
+      )
 
     left_grad = constrained_grad(
         self.left_face_constraint,
         self.left_face_constraint_is_grad,
+        self.left_face_constraint_is_flux,
         self.value[0],
         right=False,
     )
     right_grad = constrained_grad(
         self.right_face_constraint,
         self.right_face_constraint_is_grad,
+        self.right_face_constraint_is_flux,
         self.value[-1],
         right=True,
     )
@@ -217,17 +228,28 @@ class CellVariable:
     """
     self.assert_not_history()
     inner = (self.value[..., :-1] + self.value[..., 1:]) / 2.0
+    # If there is a flux condition, assume a zero gradient here,
+    # because there isn't enough information to actually calculate
+    # what the boundary value should be
     left_face = jax.lax.cond(
-        self.left_face_constraint_is_grad,
-        # Maintain left_face consistent with left_face_grad_constraint
-        lambda: self.value[..., 0:1] - self.left_face_constraint * self.dr / 2,
-        lambda: jnp.array([self.left_face_constraint]),
+        self.left_face_constraint_is_flux,
+        lambda: self.value[..., 0:1],
+        lambda: jax.lax.cond(
+            self.left_face_constraint_is_grad,
+            # Maintain left_face consistent with left_face_grad_constraint
+            lambda: self.value[..., 0:1] - self.left_face_constraint * self.dr / 2,
+            lambda: jnp.array([self.left_face_constraint]),
+        ),
     )
     right_face = jax.lax.cond(
-        self.right_face_constraint_is_grad,
-        # Maintain right_face consistent with right_face_grad_constraint
-        lambda: self.value[..., -1:] + self.right_face_constraint * self.dr / 2,
-        lambda: jnp.array([self.right_face_constraint]),
+        self.right_face_constraint_is_flux,
+        lambda: self.value[..., -1:],
+        lambda: jax.lax.cond(
+            self.right_face_constraint_is_grad,
+            # Maintain right_face consistent with right_face_grad_constraint
+            lambda: self.value[..., -1:] + self.right_face_constraint * self.dr / 2,
+            lambda: jnp.array([self.right_face_constraint]),
+        ),
     )
     return jnp.concatenate([left_face, inner, right_face], axis=-1)
 
