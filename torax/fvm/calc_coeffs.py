@@ -962,8 +962,7 @@ def calc_temp_flux(
     chi_face: jax.Array
 ) -> jax.Array:
   """Calculate the temperature flux, normalised to nref*keV2J."""
-  particle_flux = calc_particle_flux(geo, n, v_face, d_face)
-  convective_flux = 5/2 * temp.face_value() * particle_flux
+  convective_flux = jnp.zeros_like(geo.rho_face_norm)
   diffusive_flux = -n.face_value() * chi_face * geo.g1_over_vpr_face * temp.face_grad()
   total_flux = convective_flux + diffusive_flux
   return total_flux.at[0].set(total_flux[1]).at[-1].set(total_flux[-2])
