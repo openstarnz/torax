@@ -30,7 +30,7 @@ from torax import state
 from torax.config import build_sim as build_sim_lib
 from torax.config import numerics as numerics_lib
 from torax.config import runtime_params as runtime_params_lib
-from torax.geometry import geometry
+from torax.geometry import circular_geometry
 from torax.geometry import geometry_provider
 from torax.pedestal_model import set_tped_nped
 from torax.sources import source_models as source_models_lib
@@ -79,14 +79,6 @@ class SimTest(sim_test_case.SimTestCase):
           _ALL_PROFILES,
           0,
       ),
-      # Tests sim.ArrayTimeStepCalculator
-      (
-          'test_arraytimestepcalculator',
-          'test_qei.py',
-          _ALL_PROFILES,
-          0,
-          True,
-      ),
       # Tests pedestal internal boundary condition
       (
           'test_pedestal',
@@ -123,7 +115,6 @@ class SimTest(sim_test_case.SimTestCase):
           _ALL_PROFILES,
           0,
           1e-11,
-          False,
       ),
       # Tests fixed_dt timestep
       (
@@ -132,7 +123,6 @@ class SimTest(sim_test_case.SimTestCase):
           _ALL_PROFILES,
           0,
           1e-11,
-          False,
       ),
       # Tests current diffusion
       (
@@ -380,6 +370,20 @@ class SimTest(sim_test_case.SimTestCase):
           _ALL_PROFILES,
           5e-5,
       ),
+      # Predictor-corrector solver with a time-dependent isotope mix.
+      (
+          'test_iterhybrid_predictor_corrector_timedependent_isotopes',
+          'test_iterhybrid_predictor_corrector_timedependent_isotopes.py',
+          _ALL_PROFILES,
+          0,
+      ),
+      # Predictor-corrector solver with tungsten.
+      (
+          'test_iterhybrid_predictor_corrector_tungsten',
+          'test_iterhybrid_predictor_corrector_tungsten.py',
+          _ALL_PROFILES,
+          0,
+      ),
       # Predictor-corrector solver with ECCD Lin Liu model.
       (
           'test_iterhybrid_predictor_corrector_ec_linliu',
@@ -387,10 +391,17 @@ class SimTest(sim_test_case.SimTestCase):
           _ALL_PROFILES,
           0,
       ),
-      # Predictor-corrector solver with simple impurity radiation
+      # Predictor-corrector solver with constant fraction of Pin radiation
       (
-          'test_iterhybrid_predictor_corrector_impurity_radiation',
-          'test_iterhybrid_predictor_corrector_impurity_radiation.py',
+          'test_iterhybrid_predictor_corrector_constant_fraction_impurity_radiation',
+          'test_iterhybrid_predictor_corrector_constant_fraction_impurity_radiation.py',
+          _ALL_PROFILES,
+          0,
+      ),
+      # Predictor-corrector solver with constant pressure pedestal model.
+      (
+          'test_iterhybrid_predictor_corrector_set_pped_tpedratio_nped',
+          'test_iterhybrid_predictor_corrector_set_pped_tpedratio_nped.py',
           _ALL_PROFILES,
           0,
       ),
@@ -449,7 +460,6 @@ class SimTest(sim_test_case.SimTestCase):
       profiles: Sequence[str],
       rtol: Optional[float] = None,
       atol: Optional[float] = None,
-      use_ref_time: bool = False,
   ):
     """Integration test comparing to reference output from TORAX."""
     # The @parameterized decorator removes the `test_torax_sim` method,
@@ -460,7 +470,6 @@ class SimTest(sim_test_case.SimTestCase):
         profiles,
         rtol=rtol,
         atol=atol,
-        use_ref_time=use_ref_time,
     )
 
   def test_fail(self):
@@ -489,10 +498,10 @@ class SimTest(sim_test_case.SimTestCase):
 
     time_step_calculator = chi_time_step_calculator.ChiTimeStepCalculator()
     geo_provider = geometry_provider.ConstantGeometryProvider(
-        geometry.build_circular_geometry()
+        circular_geometry.build_circular_geometry()
     )
 
-    sim = sim_lib.build_sim_object(
+    sim = sim_lib.Sim.create(
         runtime_params=runtime_params,
         geometry_provider=geo_provider,
         stepper_builder=linear_theta_method.LinearThetaMethodBuilder(),
@@ -599,7 +608,6 @@ class SimTest(sim_test_case.SimTestCase):
     dynamic_runtime_params_slice = sim.dynamic_runtime_params_slice_provider(
         t=loading_time,
     )
-    source_models = sim.source_models_builder()
 
     # Load in the reference core profiles.
     Ip_total = ref_profiles[output.IP_PROFILE_FACE][index, -1] / 1e6
@@ -639,8 +647,6 @@ class SimTest(sim_test_case.SimTestCase):
         sim.static_runtime_params_slice,
         dynamic_runtime_params_slice,
         geo,
-        source_models,
-        sim.time_step_calculator,
         sim.step_fn,
     )
 
@@ -676,8 +682,7 @@ class SimTest(sim_test_case.SimTestCase):
     sim = self._get_sim(restart_config)
     sim_outputs = sim.run()
     history = output.StateHistory(sim_outputs, sim.source_models)
-    geo = sim.geometry_provider(sim.initial_state.t)
-    data_tree_restart = history.simulation_output_to_xr(geo)
+    data_tree_restart = history.simulation_output_to_xr()
 
     # Load the reference dataset.
     datatree_ref = output.load_state_file(
@@ -734,7 +739,7 @@ class SimTest(sim_test_case.SimTestCase):
     with self.assertRaisesRegex(ValueError, 'different mesh'):
       sim.update_base_components(
           geometry_provider=geometry_provider.ConstantGeometryProvider(
-              geometry.build_circular_geometry(n_rho=10)
+              circular_geometry.build_circular_geometry(n_rho=10)
           )
       )
 

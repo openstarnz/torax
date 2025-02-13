@@ -41,7 +41,6 @@ from torax import jax_utils
 
 AuxiliaryOutput: TypeAlias = block_1d_coeffs.AuxiliaryOutput
 Block1DCoeffs: TypeAlias = block_1d_coeffs.Block1DCoeffs
-Block1DCoeffsCallback: TypeAlias = block_1d_coeffs.Block1DCoeffsCallback
 
 
 FLUX_BOUNDARY_CALCULATION = False

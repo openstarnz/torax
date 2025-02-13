@@ -45,16 +45,29 @@ Generalization to geometry data beyond CHEASE is also planned.
 Plasma composition, initial and prescribed conditions
 =====================================================
 
-Presently, TORAX only accommodates a single main ion species,configured with its
-atomic mass number (:math:`A_i`) and charge state (:math:`Z_i`). The plasma effective
-charge, :math:`Z_\textit{eff}`, is assumed to be radially flat and is also
-user-configurable. A single impurity with charge state :math:`Z_\textit{imp}` is
-specified to accommodate :math:`Z_\textit{eff} > 1`. The main ion density dilution
-is then calculated as follows:
+Presently, TORAX accommodates a single main ion species and single impurity species,
+which can be comprised of time-dependent mixtures of ions with fractional abundances
+summing to 1. This is useful for example for simulating isotope mixes. Based on the
+ion symbols and fractional abundances, the average mass of each species is determined.
+The average charge state of each ion in each mixture is determined by `Mavrin polynomials <https://doi.org/10.1080/10420150.2018.1462361>`_,
+which are fitted to atomic data, and in the temperature ranges of interest in the tokamak core,
+are well approximated as 1D functions of electron temperature. All ions with atomic numbers below
+Carbon are assumed to be fully ionized.
+
+The impurity and main ion densities are constrained by the plasma effective
+charge, :math:`Z_\mathrm{eff}`, which is a user-provided 2D array in both time and space,
+as well as quasineutrality.
+
+:math:`n_i`, and :math:`n_{imp}`, are solved from the
+following system of equations, where :math:`Z_\mathrm{eff}` and the electron density are
+known, and :math:`Z_\mathrm{imp}` is the average impurity charge of the impurity mixture,
+with the average charge state for each ion determined from the Mavrin polynomials.
 
 .. math::
 
-  n_i=(Z_\textit{imp}-Z_\textit{eff})/(Z_\textit{imp}-1)n_e
+  n_\mathrm{i}Z_\mathrm{i}^2 + n_\mathrm{imp}Z_\mathrm{imp}^2 = n_\mathrm{e}Z_\mathrm{eff}
+
+  n_\mathrm{i}Z_\mathrm{i} + n_\mathrm{imp}Z_\mathrm{imp} = n_\mathrm{e}
 
 Initial conditions for the evolving profiles :math:`T_i`, :math:`T_e`, :math:`n_e`,
 and :math:`\psi` are user-configurable. For :math:`T_{i,e}`, both the initial core
@@ -125,8 +138,7 @@ TORAX currently offers three transport models:
     The particle convection velocity, :math:`V_e`, is user-defined.
 
   - **Bohm-GyroBohm:** A widely used semi-empirical model summing terms proportional to Bohm
-    and gyro-Bohm scaling factors. We use the implementation from `Tholerus et al <https://doi.org/10.1088/1741-4326/ad6ea2>`_,
-    Section 3.3.
+    and gyro-Bohm scaling factors (`Erba et al, 1998 <doi.org/10.1088/0029-5515/38/7/305>`_).
 
     The heat diffusivities for electrons and ions are given by:
 
@@ -169,7 +181,7 @@ TORAX currently offers three transport models:
     coordinate, :math:`p_e` is the electron pressure, and :math:`T_e` is the
     electron temperature.
 
-    The electron diffusivity is given by:
+    The electron diffusivity is given by `Garzotti et al, 2003 <doi.org/10.1088/0029-5515/43/12/025>`_:
 
     .. math::
       D_e = \eta \frac{\chi_e \chi_i}{\chi_e + \chi_i}
@@ -180,15 +192,15 @@ TORAX currently offers three transport models:
 
       \eta = c_1 + (c_2 - c_1) \rho_{\text{tor}}
 
-    where :math:`c_1` and :math:`c_2` are constants.
+    where :math:`c_1` and :math:`c_2` are user-defined parameters.
 
-    The electron convectivity is given by:
+    There is little discussion in the literature about setting the electron convectivity from the Bohm/gyro-Bohm model.
+    Following RAPTOR's `vpdn_chiescal` method, in TORAX, we set the electron convectivity proportional to the diffusivity,
 
     .. math::
-      v_e = \frac{1}{2} \frac{D_e A^2}{V \frac{dV}{d\rho}}
+      v_e = c_v D_e
 
-    where :math:`A` and :math:`V` are the area and volume of the flux surface
-    respectively.
+    where :math:`c_v` is a user-defined parameter.
 
     The default values for the model parameters are as follows:
 
@@ -200,7 +212,9 @@ TORAX currently offers three transport models:
 
     :math:`c_2 = 0.3`
 
-    We note that the Bohm-GyroBohm model TORAX implementation is presently
+    :math:`c_v = -0.1`
+
+    Please note that the Bohm-GyroBohm model TORAX implementation is presently
     experimental and subject to ongoing verification against established simulations.
 
   - **QLKNN:** This is a ML-surrogate model trained on a large dataset of the `QuaLiKiz <https://gitlab.com/qualikiz-group/QuaLiKiz>`_
@@ -409,8 +423,6 @@ Presently, TORAX provides three built-in formula-based particle sources for the 
 
 Radiation
 ---------
-Currently, TORAX has dedicated models for Bremsstrahlung and cyclotron radiation.
-Models for line radiation are left for future work.
 
 Bremsstrahlung
 ^^^^^^^^^^^^^^
@@ -426,8 +438,31 @@ with a deposition profile from `Artaud NF 2018 <https://doi.org/10.1088/1741-432
 The Albajar model includes a parameterization of the temperature profile which in TORAX is fit by simple
 grid search for computational efficiency.
 
+Impurity Radiation
+^^^^^^^^^^^^^^^^^^
+
+The following models are available:
+
+* Set the impurity radiation to be a constant fraction of the total external input power.
+
+* Polynomial fits to ADAS data from `Mavrin, 2018. <https://doi.org/10.1080/10420150.2018.1462361>`_
+  Provides radiative cooling rates for the following impurity species:
+    - Helium
+    - Lithium
+    - Beryllium
+    - Carbon
+    - Nitrogen
+    - Oxygen
+    - Neon
+    - Argon
+    - Krypton
+    - Xenon
+    - Tungsten
+  These cooling curves are multiplied by the electron density and impurity densities to obtain the impurity radiation power density.
+  The valid temperature range of the fit is [0.1-100] keV.
+
 Ion Cyclotron Resonance Heating
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+-------------------------------
 
 Presently this source is implemented for a SPARC specific ICRH scenario.
 

@@ -97,21 +97,6 @@ class CellVariable:
         left_face_constraint_is_flux=False, right_face_constraint_is_flux=False,
     )
 
-  def project(self, weights):
-    assert self.history is not None
-
-    def project(x):
-      return jnp.dot(weights, x)
-
-    return dataclasses.replace(
-        self,
-        value=project(self.value),
-        dr=self.dr[0],
-        left_face_constraint=project(self.left_face_constraint),
-        right_face_constraint=project(self.right_face_constraint),
-        history=None,
-    )
-
   def __post_init__(self):
     self.sanity_check()
 
@@ -277,18 +262,6 @@ class CellVariable:
           'by `jax.lax.scan`. Most methods of a CellVariable '
           'do not work in history mode.'
       )
-      if hasattr(self.history, 'ndim'):
-        if self.history.ndim == 0 or (
-            self.history.ndim == 1 and self.history.shape[0] == 1
-        ):
-          msg += (
-              f' self.history={self.history} which probably indicates'
-              ' (due to its scalar shape)'
-              ' that an indexing or projection operation failed to'
-              ' turn off history mode. self.history should be None for'
-              ' non-history or a a vector of shape (history_length) for'
-              ' history.'
-          )
       raise AssertionError(msg)
 
   def __hash__(self):

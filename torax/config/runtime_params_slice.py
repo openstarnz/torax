@@ -46,6 +46,8 @@ from torax.config import plasma_composition
 from torax.config import profile_conditions
 from torax.config import runtime_params as general_runtime_params_lib
 from torax.geometry import geometry
+from torax.geometry import geometry_provider as geometry_provider_lib
+from torax.geometry import standard_geometry
 from torax.pedestal_model import runtime_params as pedestal_model_params
 from torax.sources import runtime_params as sources_params
 from torax.stepper import runtime_params as stepper_params
@@ -126,6 +128,13 @@ class StaticRuntimeParamsSlice:
   current_eq: bool
   # Solve the density equation (n evolves over time)
   dens_eq: bool
+  # Ion symbols for main ion and impurity (which each could be mixtures of ions)
+  # These are static to simplify source functions for fusion power and radiation
+  # which are species-dependent.
+  # TODO(b/390279669): add guards against changing ion information
+  # inconsistently between the static and dynamic runtime params slices.
+  main_ion_names: tuple[str, ...]
+  impurity_names: tuple[str, ...]
   # Should flux and gradient boundary conditions be turned into value boundary conditions
   # This is an approximation, but allows flux boundary conditions to be used
   calculate_flux_boundary: bool
@@ -144,9 +153,16 @@ class StaticRuntimeParamsSlice:
         self.el_heat_eq,
         self.current_eq,
         self.dens_eq,
+        self.main_ion_names,
+        self.impurity_names,
         self.calculate_flux_boundary,
         self.adaptive_dt,
     ))
+
+  def validate_new(self, new_params: StaticRuntimeParamsSlice):
+    """Validates that the new static runtime params slice is compatible."""
+    if set(new_params.sources) != set(self.sources):
+      raise ValueError('New static runtime params slice has different sources.')
 
 
 def _build_dynamic_sources(
@@ -182,8 +198,8 @@ def build_static_runtime_params_slice(
       changed array sizes, and hence would require a recompilation. Useful to
       have a static (concrete) mesh for various internal calculations.
     stepper: stepper runtime params from which stepper static variables are
-      extracted, related to solver methods. If None, defaults to the
-      default stepper runtime params.
+      extracted, related to solver methods. If None, defaults to the default
+      stepper runtime params.
 
   Returns:
     A StaticRuntimeParamsSlice.
@@ -200,6 +216,8 @@ def build_static_runtime_params_slice(
       el_heat_eq=runtime_params.numerics.el_heat_eq,
       current_eq=runtime_params.numerics.current_eq,
       dens_eq=runtime_params.numerics.dens_eq,
+      main_ion_names=runtime_params.plasma_composition.get_main_ion_names(),
+      impurity_names=runtime_params.plasma_composition.get_impurity_names(),
       calculate_flux_boundary=runtime_params.numerics.calculate_flux_boundary,
       adaptive_dt=runtime_params.numerics.adaptive_dt,
   )
@@ -284,6 +302,20 @@ class DynamicRuntimeParamsSliceProvider:
     self._construct_providers()
 
   @property
+  def sources(self) -> dict[str, sources_params.RuntimeParams]:
+    return self._sources
+
+  def validate_new(
+      self,
+      new_provider: DynamicRuntimeParamsSliceProvider,
+  ):
+    """Validates that the new provider is compatible."""
+    if set(new_provider.sources) != set(self.sources):
+      raise ValueError(
+          'New dynamic runtime params slice provider has different sources.'
+      )
+
+  @property
   def runtime_params_provider(
       self,
   ) -> general_runtime_params_lib.GeneralRuntimeParamsProvider:
@@ -329,12 +361,29 @@ class DynamicRuntimeParamsSliceProvider:
     )
 
 
+def get_consistent_dynamic_runtime_params_slice_and_geometry(
+    *,
+    t: chex.Numeric,
+    dynamic_runtime_params_slice_provider: DynamicRuntimeParamsSliceProvider,
+    geometry_provider: geometry_provider_lib.GeometryProvider,
+) -> tuple[DynamicRuntimeParamsSlice, geometry.Geometry]:
+  """Returns the dynamic runtime params and geometry for a given time."""
+  geo = geometry_provider(t)
+  dynamic_runtime_params_slice = dynamic_runtime_params_slice_provider(
+      t=t,
+  )
+  dynamic_runtime_params_slice, geo = make_ip_consistent(
+      dynamic_runtime_params_slice, geo
+  )
+  return dynamic_runtime_params_slice, geo
+
+
 def make_ip_consistent(
     dynamic_runtime_params_slice: DynamicRuntimeParamsSlice,
     geo: geometry.Geometry,
 ) -> tuple[DynamicRuntimeParamsSlice, geometry.Geometry]:
   """Fixes Ip to be the same across dynamic_runtime_params_slice and geo."""
-  if isinstance(geo, geometry.StandardGeometry):
+  if isinstance(geo, standard_geometry.StandardGeometry):
     if geo.Ip_from_parameters:
       # If Ip is from parameters, renormalise psi etc to match the Ip in the
       # parameters.
