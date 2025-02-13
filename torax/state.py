@@ -335,6 +335,10 @@ class PostProcessedOutputs:
     ne_volume_avg: Volume average electron density [nref m^-3]
     ni_volume_avg: Volume average main ion density [nref m^-3]
     q95: q at 95% of the normalized poloidal flux
+    flux_temp_ion_face: Ion heat flux
+    flux_temp_el_face: Electron heat flux
+    flux_ni_face: Main ion particle flux
+    flux_ne_face: Electron particle flux
   """
 
   pressure_thermal_ion_face: array_typing.ArrayFloat
@@ -390,6 +394,10 @@ class PostProcessedOutputs:
   ne_volume_avg: array_typing.ScalarFloat
   ni_volume_avg: array_typing.ScalarFloat
   q95: array_typing.ScalarFloat
+  flux_temp_ion_face: array_typing.ArrayFloat
+  flux_temp_el_face: array_typing.ArrayFloat
+  flux_ni_face: array_typing.ArrayFloat
+  flux_ne_face: array_typing.ArrayFloat
   # pylint: enable=invalid-name
 
   @classmethod
@@ -445,6 +453,10 @@ class PostProcessedOutputs:
         ne_volume_avg=jnp.array(0.0),
         ni_volume_avg=jnp.array(0.0),
         q95=jnp.array(0.0),
+        flux_temp_ion_face=jnp.zeros(geo.rho_face.shape),
+        flux_temp_el_face=jnp.zeros(geo.rho_face.shape),
+        flux_ni_face=jnp.zeros(geo.rho_face.shape),
+        flux_ne_face=jnp.zeros(geo.rho_face.shape),
     )
 
 
