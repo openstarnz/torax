@@ -472,101 +472,68 @@ def _calc_coeffs_full(
   # values are close to and geo.rho_face_norm values.
   # Note that Pereverzev-Corrigan terms will still be included in constant
   # transport regions, to avoid transient discontinuities
-  chi_face_ion = jnp.where(
-      jnp.logical_and(
-          dynamic_runtime_params_slice.transport.apply_inner_patch,
-          geo.rho_face_norm
-          < dynamic_runtime_params_slice.transport.rho_inner + consts.eps,
-      ),
-      dynamic_runtime_params_slice.transport.chii_inner,
+  def apply_inner_patch(original, inner_value):
+    return jnp.where(
+        jnp.logical_and(
+            dynamic_runtime_params_slice.transport.apply_inner_patch,
+            geo.rho_face_norm
+            < dynamic_runtime_params_slice.transport.rho_inner + consts.eps,
+        ),
+        inner_value,
+        original,
+    )
+
+  chi_face_ion = apply_inner_patch(
       chi_face_ion,
+      dynamic_runtime_params_slice.transport.chii_inner,
   )
-  chi_face_el = jnp.where(
-      jnp.logical_and(
-          dynamic_runtime_params_slice.transport.apply_inner_patch,
-          geo.rho_face_norm
-          < dynamic_runtime_params_slice.transport.rho_inner + consts.eps,
-      ),
-      dynamic_runtime_params_slice.transport.chie_inner,
+  chi_face_el = apply_inner_patch(
       chi_face_el,
+      dynamic_runtime_params_slice.transport.chie_inner,
   )
-  d_face_el = jnp.where(
-      jnp.logical_and(
-          dynamic_runtime_params_slice.transport.apply_inner_patch,
-          geo.rho_face_norm
-          < dynamic_runtime_params_slice.transport.rho_inner + consts.eps,
-      ),
-      dynamic_runtime_params_slice.transport.De_inner,
+  d_face_el = apply_inner_patch(
       d_face_el,
+      dynamic_runtime_params_slice.transport.De_inner,
   )
-  v_face_el = jnp.where(
-      jnp.logical_and(
-          dynamic_runtime_params_slice.transport.apply_inner_patch,
-          geo.rho_face_norm
-          < dynamic_runtime_params_slice.transport.rho_inner + consts.eps,
-      ),
-      dynamic_runtime_params_slice.transport.Ve_inner,
+  v_face_el = apply_inner_patch(
       v_face_el,
+      dynamic_runtime_params_slice.transport.Ve_inner,
   )
 
   # Apply outer patch constant transport coefficients.
   # Due to Pereverzev-Corrigan convection, it is required
   # for the convection modes to be 'ghost' to avoid numerical instability
-  chi_face_ion = jnp.where(
-      jnp.logical_and(
-          jnp.logical_and(
-              dynamic_runtime_params_slice.transport.apply_outer_patch,
-              jnp.logical_not(
-                  dynamic_runtime_params_slice.profile_conditions.set_pedestal
-              ),
-          ),
-          geo.rho_face_norm
-          > dynamic_runtime_params_slice.transport.rho_outer - consts.eps,
-      ),
-      dynamic_runtime_params_slice.transport.chii_outer,
+  def apply_outer_patch(original, outer_value):
+    return jnp.where(
+        jnp.logical_and(
+            jnp.logical_and(
+                dynamic_runtime_params_slice.transport.apply_outer_patch,
+                jnp.logical_not(
+                    dynamic_runtime_params_slice.profile_conditions.set_pedestal
+                ),
+            ),
+            geo.rho_face_norm
+            > dynamic_runtime_params_slice.transport.rho_outer - consts.eps,
+        ),
+        outer_value,
+        original,
+    )
+
+  chi_face_ion = apply_outer_patch(
       chi_face_ion,
+      dynamic_runtime_params_slice.transport.chii_outer,
   )
-  chi_face_el = jnp.where(
-      jnp.logical_and(
-          jnp.logical_and(
-              dynamic_runtime_params_slice.transport.apply_outer_patch,
-              jnp.logical_not(
-                  dynamic_runtime_params_slice.profile_conditions.set_pedestal
-              ),
-          ),
-          geo.rho_face_norm
-          > dynamic_runtime_params_slice.transport.rho_outer - consts.eps,
-      ),
-      dynamic_runtime_params_slice.transport.chie_outer,
+  chi_face_el = apply_outer_patch(
       chi_face_el,
+      dynamic_runtime_params_slice.transport.chie_outer,
   )
-  d_face_el = jnp.where(
-      jnp.logical_and(
-          jnp.logical_and(
-              dynamic_runtime_params_slice.transport.apply_outer_patch,
-              jnp.logical_not(
-                  dynamic_runtime_params_slice.profile_conditions.set_pedestal
-              ),
-          ),
-          geo.rho_face_norm
-          > dynamic_runtime_params_slice.transport.rho_outer - consts.eps,
-      ),
-      dynamic_runtime_params_slice.transport.De_outer,
+  d_face_el = apply_outer_patch(
       d_face_el,
+      dynamic_runtime_params_slice.transport.De_outer,
   )
-  v_face_el = jnp.where(
-      jnp.logical_and(
-          jnp.logical_and(
-              dynamic_runtime_params_slice.transport.apply_outer_patch,
-              jnp.logical_not(
-                  dynamic_runtime_params_slice.profile_conditions.set_pedestal
-              ),
-          ),
-          geo.rho_face_norm
-          > dynamic_runtime_params_slice.transport.rho_outer - consts.eps,
-      ),
-      dynamic_runtime_params_slice.transport.Ve_outer,
+  v_face_el = apply_outer_patch(
       v_face_el,
+      dynamic_runtime_params_slice.transport.Ve_outer,
   )
 
   # Update the transport coeffs with the new profiles.
