@@ -127,8 +127,7 @@ class Geometry:
   # TODO(b/356356966): extend documentation to define what each attribute is.
   geometry_type: GeometryType
   torax_mesh: Grid1D
-  Phi: chex.Array
-  Phi_face: chex.Array
+  rho_b: chex.Array
   Rmaj: chex.Array
   Rmin: chex.Array
   B0: chex.Array
@@ -185,6 +184,14 @@ class Geometry:
       raise ValueError('Phi_face does not match expected value.')
 
   @property
+  def Phi(self) -> chex.Array:
+    return np.pi * self.B0 * self.rho ** 2
+
+  @property
+  def Phi_face(self) -> chex.Array:
+    return np.pi * self.B0 * self.rho_face ** 2
+
+  @property
   def rho_norm(self) -> chex.Array:
     return self.torax_mesh.cell_centers
 
@@ -217,14 +224,9 @@ class Geometry:
     return self.drho_norm * self.rho_b
 
   @property
-  def rho_b(self) -> chex.Array:
-    """Toroidal flux coordinate at boundary (LCFS)."""
-    return jnp.sqrt(self.Phib / np.pi / self.B0)
-
-  @property
   def Phib(self) -> chex.Array:
     """Toroidal flux at boundary (LCFS)."""
-    return self.Phi_face[..., -1]
+    return np.pi * self.B0 * self.rho_b**2
 
   @property
   def g1_over_vpr(self) -> chex.Array:

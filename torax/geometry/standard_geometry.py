@@ -958,9 +958,6 @@ def build_standard_geometry(
       rho_face_norm, intermediate.elongation
   )
 
-  Phi_face = rhon_interpolation_func(rho_face_norm, intermediate.Phi)
-  Phi = rhon_interpolation_func(rho_norm, intermediate.Phi)
-
   F_face = rhon_interpolation_func(rho_face_norm, intermediate.F)
   F = rhon_interpolation_func(rho_norm, intermediate.F)
   F_hires = rhon_interpolation_func(rho_hires_norm, intermediate.F)
@@ -1007,8 +1004,7 @@ def build_standard_geometry(
   return StandardGeometry(
       geometry_type=intermediate.geometry_type,
       torax_mesh=mesh,
-      Phi=Phi,
-      Phi_face=Phi_face,
+      rho_b=rho_b,
       Rmaj=intermediate.Rmaj,
       Rmin=intermediate.Rmin,
       B0=intermediate.B,

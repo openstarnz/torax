@@ -67,10 +67,6 @@ def build_circular_geometry(
   Rmaj = np.array(Rmaj)
   B0 = np.array(B0)
 
-  # Define toroidal flux
-  Phi = np.pi * B0 * rho**2
-  Phi_face = np.pi * B0 * rho_face**2
-
   # Elongation profile.
   # Set to be a linearly increasing function from 1 to elongation_LCFS, which
   # is the elongation value at the last closed flux surface, set in config.
@@ -186,8 +182,7 @@ def build_circular_geometry(
       # Set the standard geometry params.
       geometry_type=geometry.GeometryType.CIRCULAR,
       torax_mesh=mesh,
-      Phi=Phi,
-      Phi_face=Phi_face,
+      rho_b=rho_b,
       Rmaj=Rmaj,
       Rmin=rho_b,
       B0=B0,
