@@ -957,7 +957,7 @@ def T_equilibrium_solution(
     return integral_solution(
         rho_norm,
         -particle_density*chi*g1/vpr,
-        5/2*particle_flux * 1e-10,  # TODO: Remove the 1e-10 when the convection term is added
+        5/2*particle_flux,
         source,
         T_right_bound,
     )
