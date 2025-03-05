@@ -25,6 +25,7 @@ from torax import jax_utils
 from torax import math_utils
 from torax import physics
 from torax import state
+from torax.fvm import calc_coeffs
 from torax.geometry import geometry
 from torax.sources import source_profiles
 
@@ -498,6 +499,15 @@ def make_outputs(
   li3 = physics.calc_li3(
       geo.Rmaj, Wpol, sim_state.core_profiles.currents.Ip_profile_face[-1]
   )
+  chi_face_ion = sim_state.core_transport.chi_face_ion
+  chi_face_el = sim_state.core_transport.chi_face_el
+  v_face = sim_state.core_transport.v_face_el
+  d_face = sim_state.core_transport.d_face_el
+  prof = sim_state.core_profiles
+  flux_temp_ion_face = calc_coeffs.calc_temp_flux(geo, prof.ni, prof.temp_ion, v_face, d_face, chi_face_ion)
+  flux_temp_el_face = calc_coeffs.calc_temp_flux(geo, prof.ne, prof.temp_el, v_face, d_face, chi_face_el)
+  flux_ni_face = calc_coeffs.calc_particle_flux(geo, prof.ni, v_face, d_face)
+  flux_ne_face = calc_coeffs.calc_particle_flux(geo, prof.ne, v_face, d_face)
 
   # pylint: enable=invalid-name
   updated_post_processed_outputs = dataclasses.replace(
@@ -533,6 +543,10 @@ def make_outputs(
       q95=q95,
       Wpol=Wpol,
       li3=li3,
+      flux_temp_ion_face=flux_temp_ion_face,
+      flux_temp_el_face=flux_temp_el_face,
+      flux_ni_face=flux_ni_face,
+      flux_ne_face=flux_ne_face,
   )
   # pylint: enable=invalid-name
   return dataclasses.replace(

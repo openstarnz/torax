@@ -351,6 +351,10 @@ class PostProcessedOutputs:
     q95: q at 95% of the normalized poloidal flux
     Wpol: Total magnetic energy [J]
     li3: Normalized plasma internal inductance, ITER convention [dimensionless]
+    flux_temp_ion_face: Ion heat flux [keV nref s^-1]
+    flux_temp_el_face: Electron heat flux [keV nref s^-1]
+    flux_ni_face: Main ion particle flux [nref s^-1]
+    flux_ne_face: Electron particle flux [nref s^-1]
   """
 
   pressure_thermal_ion_face: array_typing.ArrayFloat
@@ -411,6 +415,10 @@ class PostProcessedOutputs:
   q95: array_typing.ScalarFloat
   Wpol: array_typing.ScalarFloat
   li3: array_typing.ScalarFloat
+  flux_temp_ion_face: array_typing.ArrayFloat
+  flux_temp_el_face: array_typing.ArrayFloat
+  flux_ni_face: array_typing.ArrayFloat
+  flux_ne_face: array_typing.ArrayFloat
   # pylint: enable=invalid-name
 
   @classmethod
@@ -471,6 +479,10 @@ class PostProcessedOutputs:
         q95=jnp.array(0.0),
         Wpol=jnp.array(0.0),
         li3=jnp.array(0.0),
+        flux_temp_ion_face=jnp.zeros(geo.rho_face.shape),
+        flux_temp_el_face=jnp.zeros(geo.rho_face.shape),
+        flux_ni_face=jnp.zeros(geo.rho_face.shape),
+        flux_ne_face=jnp.zeros(geo.rho_face.shape),
     )
 
 
