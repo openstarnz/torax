@@ -81,6 +81,15 @@ class GeometryTest(parameterized.TestCase):
     )
     standard_geometry.build_standard_geometry(intermediate)
 
+    # Ensure that the geometry is (approximately) correct at the magnetic axis
+    np.testing.assert_almost_equal(intermediate.Rin[0], intermediate.Rout[0], decimal=3)
+    np.testing.assert_almost_equal(intermediate.int_dl_over_Bp[0], 0, decimal=1)
+    np.testing.assert_almost_equal(intermediate.flux_surf_avg_1_over_R2[0], 1 / intermediate.Rin[0] ** 2, decimal=4)
+    np.testing.assert_almost_equal(intermediate.flux_surf_avg_RBp[0], 0, decimal=2)
+    np.testing.assert_almost_equal(intermediate.flux_surf_avg_R2Bp2[0], 0, decimal=5)
+    np.testing.assert_almost_equal(intermediate.flux_surf_avg_Bp2[0], 0, decimal=5)
+    np.testing.assert_almost_equal(intermediate.Ip_profile[0], 0, decimal=0)
+
   def test_access_z_magnetic_axis_raises_error_for_chease_geometry(self):
     """Test that accessing z_magnetic_axis raises error for CHEASE geometry."""
     intermediate = standard_geometry.StandardGeometryIntermediates.from_chease()
