@@ -755,19 +755,19 @@ class StandardGeometryIntermediates:
 
       # Append to lists.
       # Start with n=1 since n=0 is the magnetic axis with no contour defined.
-      areas[n + 1] = area
-      volumes[n + 1] = volume
-      R_inboard[n + 1] = x_surface.min()
-      R_outboard[n + 1] = x_surface.max()
-      int_dl_over_Bp_eqdsk[n + 1] = surface_int_dl_over_bpol
-      flux_surf_avg_1_over_R2_eqdsk[n + 1] = surface_FSA_int_one_over_r2
-      flux_surf_avg_RBp_eqdsk[n + 1] = surface_FSA_abs_grad_psi
-      flux_surf_avg_R2Bp2_eqdsk[n + 1] = surface_FSA_abs_grad_psi2
-      flux_surf_avg_Bp2_eqdsk[n + 1] = surface_FSA_Bpol_squared
-      Ip_eqdsk[n + 1] = surface_int_bpol_dl / constants.CONSTANTS.mu0
-      delta_upper_face_eqdsk[n + 1] = surface_delta_upper_face
-      delta_lower_face_eqdsk[n + 1] = surface_delta_lower_face
-      elongation[n + 1] = (Z_upperextent - Z_lowerextent) / (2.0 * Rmin_local)
+      areas[n] = area
+      volumes[n] = volume
+      R_inboard[n] = x_surface.min()
+      R_outboard[n] = x_surface.max()
+      int_dl_over_Bp_eqdsk[n] = surface_int_dl_over_bpol
+      flux_surf_avg_1_over_R2_eqdsk[n] = surface_FSA_int_one_over_r2
+      flux_surf_avg_RBp_eqdsk[n] = surface_FSA_abs_grad_psi
+      flux_surf_avg_R2Bp2_eqdsk[n] = surface_FSA_abs_grad_psi2
+      flux_surf_avg_Bp2_eqdsk[n] = surface_FSA_Bpol_squared
+      Ip_eqdsk[n] = surface_int_bpol_dl / constants.CONSTANTS.mu0
+      delta_upper_face_eqdsk[n] = surface_delta_upper_face
+      delta_lower_face_eqdsk[n] = surface_delta_lower_face
+      elongation[n] = (Z_upperextent - Z_lowerextent) / (2.0 * Rmin_local)
 
     if manually_define_axis:
       # Now set n=0 quantities. StandardGeometryIntermediate values at the
