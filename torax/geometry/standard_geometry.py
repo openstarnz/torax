@@ -652,17 +652,21 @@ class StandardGeometryIntermediates:
     surfaces = []
     cg_psi = contourpy.contour_generator(X, Z, masked_psi_eqdsk_2dgrid)
 
-    # Skip magnetic axis since no contour is defined there.
-    for _, _psi in enumerate(psi_interpolant[1:]):
+    # Skip the first closed flux contour if it is a magnetic axis
+    manually_define_axis = False
+    for n, _psi in enumerate(psi_interpolant):
       vertices = cg_psi.create_contour(_psi)
       if not vertices:
+        if n == 0:
+          manually_define_axis = True
+          continue
         raise ValueError(f"""
             Valid contour not found for EQDSK geometry for psi value {_psi}.
             Possible reason is too many surfaces requested.
             Try reducing n_surfaces from the current value of {n_surfaces}.
             """)
       x_surface, z_surface = vertices[0].T[0], vertices[0].T[1]
-      surfaces.append((x_surface, z_surface))
+      surfaces.append((n, x_surface, z_surface))
 
     # -----------------------------------------------------------
     # --------- Compute Flux surface averages and 1D profiles ---------
@@ -673,25 +677,24 @@ class StandardGeometryIntermediates:
     # -----------------------------------------------------------
 
     # Gathering area for profiles
-    areas, volumes = np.empty(len(surfaces) + 1), np.empty(len(surfaces) + 1)
-    R_inboard, R_outboard = np.empty(len(surfaces) + 1), np.empty(
-        len(surfaces) + 1
+    areas, volumes = np.empty(n_surfaces), np.empty(n_surfaces)
+    R_inboard, R_outboard = np.empty(n_surfaces), np.empty(
+        n_surfaces
     )
-    flux_surf_avg_1_over_R2_eqdsk = np.empty(len(surfaces) + 1)  # <1/R**2>
-    flux_surf_avg_Bp2_eqdsk = np.empty(len(surfaces) + 1)  # <Bp**2>
-    flux_surf_avg_RBp_eqdsk = np.empty(len(surfaces) + 1)  # <|grad(psi)|>
-    flux_surf_avg_R2Bp2_eqdsk = np.empty(len(surfaces) + 1)  # <|grad(psi)|**2>
+    flux_surf_avg_1_over_R2_eqdsk = np.empty(n_surfaces)  # <1/R**2>
+    flux_surf_avg_Bp2_eqdsk = np.empty(n_surfaces)  # <Bp**2>
+    flux_surf_avg_RBp_eqdsk = np.empty(n_surfaces)  # <|grad(psi)|>
+    flux_surf_avg_R2Bp2_eqdsk = np.empty(n_surfaces)  # <|grad(psi)|**2>
     int_dl_over_Bp_eqdsk = np.empty(
-        len(surfaces) + 1
+        n_surfaces
     )  # int(Rdl / | grad(psi) |)
-    Ip_eqdsk = np.empty(len(surfaces) + 1)  # Toroidal plasma current
-    delta_upper_face_eqdsk = np.empty(len(surfaces) + 1)  # Upper face delta
-    delta_lower_face_eqdsk = np.empty(len(surfaces) + 1)  # Lower face delta
-    elongation = np.empty(len(surfaces) + 1)  # Elongation
+    Ip_eqdsk = np.empty(n_surfaces)  # Toroidal plasma current
+    delta_upper_face_eqdsk = np.empty(n_surfaces)  # Upper face delta
+    delta_lower_face_eqdsk = np.empty(n_surfaces)  # Lower face delta
+    elongation = np.empty(n_surfaces)  # Elongation
 
     # ---- Compute
-    for n, (x_surface, z_surface) in enumerate(surfaces):
-
+    for n, x_surface, z_surface in surfaces:
       # dl, line elements on which we will integrate
       surface_dl = np.sqrt(
           np.gradient(x_surface) ** 2 + np.gradient(z_surface) ** 2
@@ -766,21 +769,22 @@ class StandardGeometryIntermediates:
       delta_lower_face_eqdsk[n + 1] = surface_delta_lower_face
       elongation[n + 1] = (Z_upperextent - Z_lowerextent) / (2.0 * Rmin_local)
 
-    # Now set n=0 quantities. StandardGeometryIntermediate values at the
-    # magnetic axis are prescribed, since a contour cannot be defined there.
-    areas[0] = 0
-    volumes[0] = 0
-    R_inboard[0] = Raxis
-    R_outboard[0] = Raxis
-    int_dl_over_Bp_eqdsk[0] = 0
-    flux_surf_avg_1_over_R2_eqdsk[0] = 1 / Raxis**2
-    flux_surf_avg_RBp_eqdsk[0] = 0
-    flux_surf_avg_R2Bp2_eqdsk[0] = 0
-    flux_surf_avg_Bp2_eqdsk[0] = 0
-    Ip_eqdsk[0] = 0
-    delta_upper_face_eqdsk[0] = delta_upper_face_eqdsk[1]
-    delta_lower_face_eqdsk[0] = delta_lower_face_eqdsk[1]
-    elongation[0] = elongation[1]
+    if manually_define_axis:
+      # Now set n=0 quantities. StandardGeometryIntermediate values at the
+      # magnetic axis are prescribed, since a contour cannot be defined there.
+      areas[0] = 0
+      volumes[0] = 0
+      R_inboard[0] = Raxis
+      R_outboard[0] = Raxis
+      int_dl_over_Bp_eqdsk[0] = 0
+      flux_surf_avg_1_over_R2_eqdsk[0] = 1 / Raxis**2
+      flux_surf_avg_RBp_eqdsk[0] = 0
+      flux_surf_avg_R2Bp2_eqdsk[0] = 0
+      flux_surf_avg_Bp2_eqdsk[0] = 0
+      Ip_eqdsk[0] = 0
+      delta_upper_face_eqdsk[0] = delta_upper_face_eqdsk[1]
+      delta_lower_face_eqdsk[0] = delta_lower_face_eqdsk[1]
+      elongation[0] = elongation[1]
 
     # q-profile on interpolation
     q_profile = q_interp(psi_interpolant)
