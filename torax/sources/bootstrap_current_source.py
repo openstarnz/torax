@@ -13,54 +13,23 @@
 # limitations under the License.
 
 """bootstrap current source profile."""
-
-from __future__ import annotations
-
 import dataclasses
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 import chex
 import jax
 from jax import numpy as jnp
-from jax.scipy import integrate
 from torax import constants
 from torax import jax_utils
-from torax import physics
+from torax import math_utils
 from torax import state
 from torax.config import runtime_params_slice
 from torax.fvm import cell_variable
 from torax.geometry import geometry
+from torax.sources import base
 from torax.sources import runtime_params as runtime_params_lib
 from torax.sources import source
 from torax.sources import source_profiles
-
-
-@dataclasses.dataclass(kw_only=True)
-class RuntimeParams(runtime_params_lib.RuntimeParams):
-  """Configuration parameters for the bootstrap current source."""
-
-  # Multiplication factor for bootstrap current
-  bootstrap_mult: float = 1.0
-  mode: runtime_params_lib.Mode = runtime_params_lib.Mode.MODEL_BASED
-
-  def make_provider(
-      self,
-      torax_mesh: geometry.Grid1D | None = None,
-  ) -> RuntimeParamsProvider:
-    return RuntimeParamsProvider(**self.get_provider_kwargs(torax_mesh))
-
-
-@chex.dataclass
-class RuntimeParamsProvider(runtime_params_lib.RuntimeParamsProvider):
-  """Provides runtime parameters for a given time and geometry."""
-
-  runtime_params_config: RuntimeParams
-
-  def build_dynamic_params(
-      self,
-      t: chex.Numeric,
-  ) -> DynamicRuntimeParams:
-    return DynamicRuntimeParams(**self.get_dynamic_params_kwargs(t))
 
 
 @chex.dataclass(frozen=True)
@@ -121,7 +90,6 @@ class BootstrapCurrentSource(source.Source):
 
     bootstrap_current = calc_sauter_model(
         bootstrap_multiplier=dynamic_source_runtime_params.bootstrap_mult,
-        q_correction_factor=dynamic_runtime_params_slice.numerics.q_correction_factor,
         nref=dynamic_runtime_params_slice.numerics.nref,
         Zeff_face=dynamic_runtime_params_slice.plasma_composition.Zeff_face,
         Zi_face=core_profiles.Zi_face,
@@ -130,6 +98,7 @@ class BootstrapCurrentSource(source.Source):
         temp_el=core_profiles.temp_el,
         temp_ion=core_profiles.temp_ion,
         psi=core_profiles.psi,
+        q_face=core_profiles.q_face,
         geo=geo,
     )
     if static_source_runtime_params.mode == runtime_params_lib.Mode.ZERO.value:
@@ -161,11 +130,39 @@ class BootstrapCurrentSource(source.Source):
     raise NotImplementedError('Call `get_bootstrap` instead.')
 
 
+class BootstrapCurrentSourceConfig(base.SourceModelBase):
+  """Bootstrap current density source profile.
+
+  Attributes:
+    bootstrap_mult: Multiplication factor for bootstrap current.
+  """
+
+  source_name: Literal['j_bootstrap'] = 'j_bootstrap'
+  bootstrap_mult: float = 1.0
+  mode: runtime_params_lib.Mode = runtime_params_lib.Mode.MODEL_BASED
+
+  def model_func(self):
+    raise NotImplementedError(
+        'Bootstrap current source is not meant to be used as a model.'
+    )
+
+  def build_source(self) -> BootstrapCurrentSource:
+    return BootstrapCurrentSource()
+
+  def build_dynamic_params(
+      self,
+      t: chex.Numeric,
+  ) -> DynamicRuntimeParams:
+    return DynamicRuntimeParams(
+        prescribed_values=self.prescribed_values.get_value(t),
+        bootstrap_mult=self.bootstrap_mult,
+    )
+
+
 @jax_utils.jit
 def calc_sauter_model(
     *,
     bootstrap_multiplier: float,
-    q_correction_factor: float,
     nref: float,
     Zeff_face: chex.Array,
     Zi_face: chex.Array,
@@ -174,11 +171,10 @@ def calc_sauter_model(
     temp_el: cell_variable.CellVariable,
     temp_ion: cell_variable.CellVariable,
     psi: cell_variable.CellVariable,
+    q_face: chex.Array,
     geo: geometry.Geometry,
 ) -> source_profiles.BootstrapCurrentProfile:
   """Calculates sigmaneo, j_bootstrap, and I_bootstrap."""
-  # Many variables throughout this function are capitalized based on physics
-  # notational conventions rather than on Google Python style
   # pylint: disable=invalid-name
 
   # Formulas from Sauter PoP 1999. Future work can include Redl PoP 2021
@@ -211,11 +207,6 @@ def calc_sauter_model(
       1.9012e04 * (temp_el.face_value() * 1e3) ** 1.5 / Zeff_face / NZ / lnLame
   )
 
-  # We don't store q_cell in the evolving core profiles, so we need to
-  # recalculate it.
-  q_face, _ = physics.calc_q_from_psi(
-      geo=geo, psi=psi, q_correction_factor=q_correction_factor
-  )
   nuestar = (
       6.921e-18
       * q_face
@@ -323,9 +314,7 @@ def calc_sauter_model(
   ) / (1 + 0.15 * nuistar**2 * ftrap**6)
 
   # calculate bootstrap current
-  prefactor = (
-      -geo.F_face * bootstrap_multiplier * 2 * jnp.pi / geo.B0
-  )
+  prefactor = -geo.F_face * bootstrap_multiplier * 2 * jnp.pi / geo.B0
 
   pe = true_ne_face * (temp_el.face_value()) * 1e3 * 1.6e-19
   pi = true_ni_face * (temp_ion.face_value()) * 1e3 * 1.6e-19
@@ -356,10 +345,7 @@ def calc_sauter_model(
   j_bootstrap = geometry.face_to_cell(j_bootstrap_face)
   sigmaneo_cell = geometry.face_to_cell(sigmaneo)
 
-  I_bootstrap = integrate.trapezoid(
-      j_bootstrap_face * geo.spr_face,
-      geo.rho_face_norm,
-  )
+  I_bootstrap = math_utils.area_integration(j_bootstrap, geo)
 
   return source_profiles.BootstrapCurrentProfile(
       sigma=sigmaneo_cell,

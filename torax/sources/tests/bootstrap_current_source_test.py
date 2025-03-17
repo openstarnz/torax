@@ -21,7 +21,7 @@ from torax.config import numerics
 from torax.config import plasma_composition
 from torax.config import runtime_params_slice
 from torax.fvm import cell_variable
-from torax.geometry import circular_geometry
+from torax.geometry import pydantic_model as geometry_pydantic_model
 from torax.sources import bootstrap_current_source
 from torax.sources import runtime_params
 from torax.sources import source_profiles
@@ -35,7 +35,9 @@ class BootstrapCurrentSourceTest(absltest.TestCase):
     self.source_name = (
         bootstrap_current_source.BootstrapCurrentSource.SOURCE_NAME
     )
-    self.geo = circular_geometry.build_circular_geometry(n_rho=n_rho)
+    self.geo = geometry_pydantic_model.CircularConfig(
+        n_rho=n_rho
+    ).build_geometry()
     dynamic_bootstap_params = bootstrap_current_source.DynamicRuntimeParams(
         prescribed_values=mock.ANY,
         bootstrap_mult=1.0,
@@ -53,7 +55,6 @@ class BootstrapCurrentSourceTest(absltest.TestCase):
             numerics.Numerics,
             instance=True,
             nref=100,
-            q_correction_factor=1.0,
         ),
     )
     self.core_profiles = mock.create_autospec(
@@ -74,6 +75,7 @@ class BootstrapCurrentSourceTest(absltest.TestCase):
             value=jnp.linspace(100, 200, n_rho), dr=self.geo.drho_norm
         ),
         Zi_face=np.linspace(1000, 2000, n_rho + 1),
+        q_face=np.linspace(1, 5, n_rho + 1),
     )
 
   def test_get_bootstrap(self):
@@ -99,7 +101,8 @@ class BootstrapCurrentSourceTest(absltest.TestCase):
     )
     self.assertEqual(bootstrap_profile.sigma.shape, self.geo.rho.shape)
     self.assertEqual(
-        bootstrap_profile.sigma_face.shape, self.geo.rho_face.shape)
+        bootstrap_profile.sigma_face.shape, self.geo.rho_face.shape
+    )
     self.assertEqual(bootstrap_profile.j_bootstrap.shape, self.geo.rho.shape)
     self.assertEqual(
         bootstrap_profile.j_bootstrap_face.shape, self.geo.rho_face.shape
@@ -134,7 +137,8 @@ class BootstrapCurrentSourceTest(absltest.TestCase):
     )
     self.assertEqual(bootstrap_profile.sigma.shape, self.geo.rho.shape)
     self.assertEqual(
-        bootstrap_profile.sigma_face.shape, self.geo.rho_face.shape)
+        bootstrap_profile.sigma_face.shape, self.geo.rho_face.shape
+    )
     self.assertEqual(bootstrap_profile.j_bootstrap.shape, self.geo.rho.shape)
     self.assertEqual(
         bootstrap_profile.j_bootstrap_face.shape, self.geo.rho_face.shape
@@ -159,8 +163,7 @@ class BootstrapCurrentSourceTest(absltest.TestCase):
         runtime_params_slice.StaticRuntimeParamsSlice,
         sources={source.SOURCE_NAME: static_bootstap_params},
     )
-    with self.assertRaisesRegex(
-        NotImplementedError, 'Prescribed mode'):
+    with self.assertRaisesRegex(NotImplementedError, 'Prescribed mode'):
       source.get_bootstrap(
           self.dynamic_params,
           static_params,

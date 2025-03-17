@@ -17,7 +17,6 @@ from absl.testing import parameterized
 import numpy as np
 import pydantic
 from torax import interpolated_param
-from torax.torax_pydantic import interpolated_param_1d
 from torax.torax_pydantic import torax_pydantic
 import xarray as xr
 
@@ -35,18 +34,18 @@ class InterpolatedParam1dTest(parameterized.TestCase):
 
     default_value = 1.53
 
-    class TestModel(torax_pydantic.BaseModelMutable):
-      a: interpolated_param_1d.TimeVaryingScalar
-      b: interpolated_param_1d.TimeVaryingScalar = pydantic.Field(
+    class TestModel(torax_pydantic.BaseModelFrozen):
+      a: torax_pydantic.TimeVaryingScalar
+      b: torax_pydantic.TimeVaryingScalar = pydantic.Field(
           default_factory=lambda: default_value, validate_default=True
       )
 
-    a_expected = interpolated_param_1d.TimeVaryingScalar(
+    a_expected = torax_pydantic.TimeVaryingScalar(
         time=np.array([0.0, 1.0, 2.0]),
         value=np.array([1.0, 2.0, 4.0]),
         interpolation_mode=interpolated_param.InterpolationMode.PIECEWISE_LINEAR,
     )
-    b_expected = interpolated_param_1d.TimeVaryingScalar(
+    b_expected = torax_pydantic.TimeVaryingScalar(
         time=np.array([0.0]),
         value=np.array([default_value]),
         interpolation_mode=interpolated_param.InterpolationMode.PIECEWISE_LINEAR,
@@ -72,7 +71,7 @@ class InterpolatedParam1dTest(parameterized.TestCase):
   def test_bool_single_value_param_always_return_constant(self):
     """Tests that when passed a single value this is always returned."""
     expected_output = True
-    single_value_param = interpolated_param_1d.TimeVaryingScalar.model_validate(
+    single_value_param = torax_pydantic.TimeVaryingScalar.model_validate(
         expected_output
     )
     np.testing.assert_allclose(
@@ -83,7 +82,24 @@ class InterpolatedParam1dTest(parameterized.TestCase):
 
   def test_dict_range_input_must_have_values(self):
     with self.assertRaises(ValueError):
-      interpolated_param_1d.TimeVaryingScalar.model_validate({})
+      torax_pydantic.TimeVaryingScalar.model_validate({})
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='negative_value',
+          values={0.0: 1.0, 2.0: -1},
+      ),
+      dict(
+          testcase_name='zero_value',
+          values=0.0,
+      ),
+  )
+  def test_raises_error_when_value_is_not_positive(self, values):
+    class TestModel(torax_pydantic.BaseModelFrozen):
+      a: torax_pydantic.PositiveTimeVaryingScalar
+
+    with self.assertRaisesRegex(pydantic.ValidationError, 'be positive.'):
+      TestModel.model_validate({'a': values})
 
   @parameterized.parameters(
       (
@@ -140,17 +156,24 @@ class InterpolatedParam1dTest(parameterized.TestCase):
       expected_output,
   ):
     """Tests that the range returns the expected output."""
-    multi_val_range = interpolated_param_1d.TimeVaryingScalar.model_validate(
-        values
-    )
+    multi_val_range = torax_pydantic.TimeVaryingScalar.model_validate(values)
 
     if isinstance(expected_output, bool):
-      self.assertEqual(multi_val_range.get_value(x=x), expected_output)
+      self.assertEqual(multi_val_range.get_value(t=x), expected_output)
     else:
       np.testing.assert_allclose(
-          multi_val_range.get_value(x=x),
+          multi_val_range.get_value(t=x),
           expected_output,
       )
+
+  def test_test_equality_cached_property(self):
+    scalar_1 = torax_pydantic.TimeVaryingScalar.model_validate(1.0)
+    scalar_2 = torax_pydantic.TimeVaryingScalar.model_validate(1.0)
+
+    # Check that the cached property does not break equality.
+    self.assertEqual(scalar_1, scalar_2)
+    scalar_1.get_value(t=0.0)
+    self.assertEqual(scalar_1, scalar_2)
 
 
 if __name__ == '__main__':

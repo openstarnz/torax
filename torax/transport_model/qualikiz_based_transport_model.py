@@ -16,30 +16,11 @@
 import chex
 from jax import numpy as jnp
 from torax import constants as constants_module
-from torax import physics
 from torax import state
 from torax.geometry import geometry
+from torax.physics import collisions
+from torax.physics import psi_calculations
 from torax.transport_model import quasilinear_transport_model
-from torax.transport_model import runtime_params as runtime_params_lib
-
-
-@chex.dataclass
-class RuntimeParams(quasilinear_transport_model.RuntimeParams):
-  """Shared parameters for Qualikiz-based models."""
-
-  # Collisionality multiplier.
-  coll_mult: float = 1.0
-  # ensure that smag - alpha > -0.2 always, to compensate for no slab modes
-  avoid_big_negative_s: bool = True
-  # reduce magnetic shear by 0.5*alpha to capture main impact of alpha
-  smag_alpha_correction: bool = True
-  # if q < 1, modify input q and smag as if q~1 as if there are sawteeth
-  q_sawtooth_proxy: bool = True
-
-  def make_provider(
-      self, torax_mesh: geometry.Grid1D | None = None
-  ) -> 'RuntimeParamsProvider':
-    return RuntimeParamsProvider(**self.get_provider_kwargs(torax_mesh))
 
 
 @chex.dataclass(frozen=True)
@@ -50,16 +31,6 @@ class DynamicRuntimeParams(quasilinear_transport_model.DynamicRuntimeParams):
   avoid_big_negative_s: bool
   smag_alpha_correction: bool
   q_sawtooth_proxy: bool
-
-
-@chex.dataclass
-class RuntimeParamsProvider(runtime_params_lib.RuntimeParamsProvider):
-  """Provides a RuntimeParams to use during time t of the sim."""
-
-  runtime_params_config: RuntimeParams
-
-  def build_dynamic_params(self, t: chex.Numeric) -> DynamicRuntimeParams:
-    return DynamicRuntimeParams(**self.get_dynamic_params_kwargs(t))
 
 
 # pylint: disable=invalid-name
@@ -108,7 +79,6 @@ class QualikizBasedTransportModel(
       self,
       Zeff_face: chex.Array,
       nref: chex.Numeric,
-      q_correction_factor: chex.Numeric,
       transport: DynamicRuntimeParams,
       geo: geometry.Geometry,
       core_profiles: state.CoreProfiles,
@@ -142,15 +112,11 @@ class QualikizBasedTransportModel(
         reference_length=geo.Rmaj,
     )
 
-    # Calculate q and s.
-    # Need to recalculate since in the nonlinear solver psi has intermediate
-    # states in the iterative solve.
-    q, _ = physics.calc_q_from_psi(
-        geo=geo,
-        psi=core_profiles.psi,
-        q_correction_factor=q_correction_factor,
-    )
-    smag = physics.calc_s_from_psi_rmid(
+    q = core_profiles.q_face
+
+    # Due to QuaLikiz geometry assumptions, we need to calculate s with respect
+    # to the midplane average, and not use the standard s_face from CoreProfiles
+    smag = psi_calculations.calc_s_rmid(
         geo,
         core_profiles.psi,
     )
@@ -167,7 +133,7 @@ class QualikizBasedTransportModel(
     )
 
     # logarithm of normalized collisionality
-    nu_star = physics.calc_nu_star(
+    nu_star = collisions.calc_nu_star(
         geo=geo,
         core_profiles=core_profiles,
         nref=nref,

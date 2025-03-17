@@ -13,32 +13,27 @@
 # limitations under the License.
 
 """Classes for representing a circular geometry."""
-
-
-from __future__ import annotations
-
 import numpy as np
 from torax.geometry import geometry
+from torax.torax_pydantic import torax_pydantic
 
 
 # Using invalid-name because we are using the same naming convention as the
 # external physics implementations
 # pylint: disable=invalid-name
 def build_circular_geometry(
-    n_rho: int = 25,
-    elongation_LCFS: float = 1.72,
-    Rmaj: float = 6.2,
-    Rmin: float = 2.0,
-    B0: float = 5.3,
-    hires_fac: int = 4,
+    n_rho: int,
+    elongation_LCFS: float,
+    Rmaj: float,
+    Rmin: float,
+    B0: float,
+    hires_fac: int,
 ) -> geometry.Geometry:
   """Constructs a circular Geometry instance used for testing only.
 
   Args:
     n_rho: Radial grid points (num cells)
-    elongation_LCFS: Elongation at last closed flux surface. Defaults to 1.72
-      for the ITER elongation, to approximately correct volume and area integral
-      Jacobians.
+    elongation_LCFS: Elongation at last closed flux surface.
     Rmaj: major radius (R) in meters
     Rmin: minor radius (a) in meters
     B0: Toroidal magnetic field on axis [T]
@@ -52,7 +47,7 @@ def build_circular_geometry(
   # toroidal flux coordinate.
   drho_norm = 1.0 / n_rho
   # Define mesh (Slab Uniform 1D with Jacobian = 1)
-  mesh = geometry.Grid1D.construct(nx=n_rho, dx=drho_norm)
+  mesh = torax_pydantic.Grid1D.construct(nx=n_rho, dx=drho_norm)
   # toroidal flux coordinate (rho) at boundary (last closed flux surface)
   rho_b = np.asarray(Rmin)
 

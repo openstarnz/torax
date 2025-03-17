@@ -18,19 +18,17 @@ Abstract base class defining updates to State.
 """
 
 import abc
-import dataclasses
 
 import jax
-from torax import core_profile_setters
 from torax import state
 from torax.config import runtime_params_slice
+from torax.core_profiles import updaters
 from torax.fvm import cell_variable
 from torax.geometry import geometry
 from torax.pedestal_model import pedestal_model as pedestal_model_lib
 from torax.sources import source_models as source_models_lib
 from torax.sources import source_profile_builders
 from torax.sources import source_profiles
-from torax.stepper import runtime_params as runtime_params_lib
 from torax.transport_model import transport_model as transport_model_lib
 
 
@@ -158,15 +156,17 @@ class Stepper(abc.ABC):
       core_transport = state.CoreTransport.zeros(geo_t)
       stepper_numeric_output = state.StepperNumericOutputs()
 
-    core_profiles_t_plus_dt = (
-        core_profile_setters.update_evolving_core_profiles(
-            x_new,
-            static_runtime_params_slice,
-            dynamic_runtime_params_slice_t_plus_dt,
-            geo_t_plus_dt,
-            core_profiles_t_plus_dt,
-            evolving_names,
-        )
+    # x_new contains the new cell-grid values of the evolving variables.
+    # Update the core profiles with the new values of the evolving variables and
+    # derived quantities like q_face, psidot, etc.
+    core_profiles_t_plus_dt = updaters.update_all_core_profiles_after_step(
+        x_new,
+        static_runtime_params_slice,
+        dynamic_runtime_params_slice_t_plus_dt,
+        geo_t_plus_dt,
+        core_sources,
+        core_profiles_t_plus_dt,
+        evolving_names,
     )
 
     return (
@@ -231,22 +231,3 @@ class Stepper(abc.ABC):
         'implement a different `__call__` that does not'
         ' need `_x_new`.'
     )
-
-
-@dataclasses.dataclass(kw_only=True)
-class StepperBuilder(abc.ABC):
-  """Factory for Stepper objects."""
-
-  @abc.abstractmethod
-  def __call__(
-      self,
-      transport_model: transport_model_lib.TransportModel,
-      source_models: source_models_lib.SourceModels,
-      pedestal_model: pedestal_model_lib.PedestalModel,
-  ) -> Stepper:
-    """Builds a Stepper instance."""
-
-  # Input parameters to the stepper built by this class.
-  runtime_params: runtime_params_lib.RuntimeParams = dataclasses.field(
-      default_factory=runtime_params_lib.RuntimeParams
-  )

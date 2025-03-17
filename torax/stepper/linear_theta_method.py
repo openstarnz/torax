@@ -13,40 +13,19 @@
 # limitations under the License.
 
 """The LinearThetaMethodStepper class."""
-
-from collections.abc import Callable
-import dataclasses
-from typing import Type, TypeAlias
-
 import jax
 from torax import state
 from torax.config import runtime_params_slice
 from torax.fvm import calc_coeffs
 from torax.fvm import cell_variable
 from torax.geometry import geometry
-from torax.pedestal_model import pedestal_model as pedestal_model_lib
-from torax.sources import source_models as source_models_lib
 from torax.sources import source_profiles
 from torax.stepper import predictor_corrector_method
-from torax.stepper import runtime_params as runtime_params_lib
 from torax.stepper import stepper as stepper_lib
-from torax.transport_model import transport_model as transport_model_lib
 
 
 class LinearThetaMethod(stepper_lib.Stepper):
   """Time step update using theta method, linearized on coefficients at t."""
-
-  def __init__(
-      self,
-      transport_model: transport_model_lib.TransportModel,
-      source_models: source_models_lib.SourceModels,
-      pedestal_model: pedestal_model_lib.PedestalModel,
-      callback_class: Type[
-          calc_coeffs.CoeffsCallback
-      ] = calc_coeffs.CoeffsCallback,
-  ):
-    super().__init__(transport_model, source_models, pedestal_model)
-    self.callback_class = callback_class
 
   def _x_new(
       self,
@@ -73,8 +52,7 @@ class LinearThetaMethod(stepper_lib.Stepper):
         [core_profiles_t_plus_dt[name] for name in evolving_names]
     )
 
-    # Instantiate coeffs_callback class
-    coeffs_callback = self.callback_class(
+    coeffs_callback = calc_coeffs.CoeffsCallback(
         static_runtime_params_slice=static_runtime_params_slice,
         transport_model=self.transport_model,
         explicit_source_profiles=explicit_source_profiles,
@@ -129,37 +107,3 @@ class LinearThetaMethod(stepper_lib.Stepper):
     )
 
     return x_new, core_sources, core_transport, stepper_numeric_outputs
-
-
-def _default_linear_builder(
-    transport_model: transport_model_lib.TransportModel,
-    source_models: source_models_lib.SourceModels,
-    pedestal_model: pedestal_model_lib.PedestalModel,
-) -> LinearThetaMethod:
-  return LinearThetaMethod(transport_model, source_models, pedestal_model)
-
-
-# Type-alias so that users only need to import this file.
-LinearRuntimeParams: TypeAlias = runtime_params_lib.RuntimeParams
-
-
-@dataclasses.dataclass(kw_only=True)
-class LinearThetaMethodBuilder(stepper_lib.StepperBuilder):
-  """Builds a LinearThetaMethod."""
-
-  builder: Callable[
-      [
-          transport_model_lib.TransportModel,
-          source_models_lib.SourceModels,
-          pedestal_model_lib.PedestalModel,
-      ],
-      LinearThetaMethod,
-  ] = _default_linear_builder
-
-  def __call__(
-      self,
-      transport_model: transport_model_lib.TransportModel,
-      source_models: source_models_lib.SourceModels,
-      pedestal_model: pedestal_model_lib.PedestalModel,
-  ) -> LinearThetaMethod:
-    return self.builder(transport_model, source_models, pedestal_model)

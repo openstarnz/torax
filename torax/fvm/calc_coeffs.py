@@ -13,34 +13,27 @@
 # limitations under the License.
 
 """Calculates Block1DCoeffs for a time step."""
-
-from __future__ import annotations
-
-import dataclasses
 import functools
 
 import jax
 import jax.numpy as jnp
 from torax import constants
-from torax import core_profile_setters
 from torax import jax_utils
-from torax import physics
 from torax import state
-from torax.config import config_args
 from torax.config import runtime_params_slice
+from torax.core_profiles import updaters
 from torax.fvm import block_1d_coeffs
 from torax.fvm import cell_variable
 from torax.geometry import geometry
 from torax.pedestal_model import pedestal_model as pedestal_model_lib
 from torax.sources import source_models as source_models_lib
-from torax.sources import source_operations
 from torax.sources import source_profile_builders
 from torax.sources import source_profiles as source_profiles_lib
 from torax.transport_model import transport_model as transport_model_lib
 
 
 class CoeffsCallback:
-  """Implements fvm.Block1DCoeffsCallback using calc_coeffs.
+  """Calculates Block1DCoeffs for a state.
 
   Attributes:
     static_runtime_params_slice: See the docstring for `stepper.Stepper`.
@@ -78,32 +71,41 @@ class CoeffsCallback:
       # should be called
       explicit_call: bool = False,
   ) -> block_1d_coeffs.Block1DCoeffs:
+    """Returns coefficients given a state x.
+
+    Used to calculate the coefficients for the implicit or explicit components
+    of the PDE system.
+
+    Args:
+      dynamic_runtime_params_slice: Runtime configuration parameters. These
+        values are potentially time-dependent and should correspond to the time
+        step of the state x.
+      geo: The geometry of the system at this time step.
+      core_profiles: The core profiles of the system at this time step.
+      x: The state with cell-grid values of the evolving variables.
+      allow_pereverzev: If True, then the coeffs are being called within a
+        linear solver. Thus could be either the predictor_corrector solver or as
+        part of calculating the initial guess for the nonlinear solver. In
+        either case, we allow the inclusion of Pereverzev-Corrigan terms which
+        aim to stabilize the linear solver when being used with highly nonlinear
+        (stiff) transport coefficients. The nonlinear solver solves the system
+        more rigorously and Pereverzev-Corrigan terms are not needed.
+      explicit_call: If True, then if theta_imp=1, only a reduced Block1DCoeffs
+        is calculated since most explicit coefficients will not be used.
+
+    Returns:
+      coeffs: The diffusion, convection, etc. coefficients for this state.
+    """
+
     # Update core_profiles with the subset of new values of evolving variables
-    replace = {k: v for k, v in zip(self.evolving_names, x)}
-    core_profiles = config_args.recursive_replace(core_profiles, **replace)
-    # Update ion and impurity density and charge states based on new iterations
-    # for temp_el and ne, if either of these are evolving.
-    if 'ne' in self.evolving_names or 'temp_el' in self.evolving_names:
-      # pylint: disable=invalid-name
-      ni, nimp, Zi, Zi_face, Zimp, Zimp_face = (
-          core_profile_setters.get_ion_density_and_charge_states(
-              self.static_runtime_params_slice,
-              dynamic_runtime_params_slice,
-              geo,
-              core_profiles.ne,
-              core_profiles.temp_el,
-          )
-      )
-      core_profiles = dataclasses.replace(
-          core_profiles,
-          ni=ni,
-          nimp=nimp,
-          Zi=Zi,
-          Zi_face=Zi_face,
-          Zimp=Zimp,
-          Zimp_face=Zimp_face,
-      )
-      # pylint: enable=invalid-name
+    core_profiles = updaters.update_core_profiles_during_step(
+        x,
+        self.static_runtime_params_slice,
+        dynamic_runtime_params_slice,
+        geo,
+        core_profiles,
+        self.evolving_names,
+    )
     if allow_pereverzev:
       use_pereverzev = self.static_runtime_params_slice.stepper.use_pereverzev
     else:
@@ -367,7 +369,7 @@ def _calc_coeffs_full(
 
   # Boolean mask for enforcing internal temperature boundary conditions to
   # model the pedestal.
-  mask = physics.internal_boundary(
+  mask = _internal_boundary(
       geo,
       pedestal_model_output.rho_norm_ped_top,
       dynamic_runtime_params_slice.profile_conditions.set_pedestal,
@@ -383,33 +385,12 @@ def _calc_coeffs_full(
       explicit=False,
       explicit_source_profiles=explicit_source_profiles,
   )
-  j_bootstrap = merged_source_profiles.j_bootstrap
-
-  # Sum over all psi sources (except the bootstrap current).
-  # Needed to ensure the correct shape if no psi sources are present.
-  external_current = jnp.zeros_like(geo.rho)
-  external_current += sum(merged_source_profiles.psi.values())
-
-  currents = dataclasses.replace(
-      core_profiles.currents,
-      j_bootstrap=j_bootstrap.j_bootstrap,
-      j_bootstrap_face=j_bootstrap.j_bootstrap_face,
-      external_current_source=external_current,
-      johm=(
-          core_profiles.currents.jtot
-          - j_bootstrap.j_bootstrap
-          - external_current
-      ),
-      I_bootstrap=j_bootstrap.I_bootstrap,
-      sigma=j_bootstrap.sigma,
-  )
-  core_profiles = dataclasses.replace(core_profiles, currents=currents)
 
   # psi source terms. Source matrix is zero for all psi sources
   source_mat_psi = jnp.zeros_like(geo.rho)
 
   # fill source vector based on both original and updated core profiles
-  source_psi = source_operations.sum_sources_psi(geo, merged_source_profiles)
+  source_psi = merged_source_profiles.total_psi_sources(geo)
 
   true_ne = core_profiles.ne.value * dynamic_runtime_params_slice.numerics.nref
   true_ni = core_profiles.ni.value * dynamic_runtime_params_slice.numerics.nref
@@ -440,7 +421,7 @@ def _calc_coeffs_full(
       1.0
       / dynamic_runtime_params_slice.numerics.resistivity_mult
       * geo.rho_norm
-      * j_bootstrap.sigma
+      * merged_source_profiles.j_bootstrap.sigma
       * consts.mu0
       * 16
       * jnp.pi**2
@@ -467,86 +448,6 @@ def _calc_coeffs_full(
           f'{type(transport_model)} does not support the density equation.'
       )
 
-  # Apply inner and outer patch constant transport coefficients. rho_inner and
-  # rho_outer are shifted by consts.eps (1e-7) to avoid ambiguities if their
-  # values are close to and geo.rho_face_norm values.
-  # Note that Pereverzev-Corrigan terms will still be included in constant
-  # transport regions, to avoid transient discontinuities
-  def apply_inner_patch(original, inner_value):
-    return jnp.where(
-        jnp.logical_and(
-            dynamic_runtime_params_slice.transport.apply_inner_patch,
-            geo.rho_face_norm
-            < dynamic_runtime_params_slice.transport.rho_inner + consts.eps,
-        ),
-        inner_value,
-        original,
-    )
-
-  chi_face_ion = apply_inner_patch(
-      chi_face_ion,
-      dynamic_runtime_params_slice.transport.chii_inner,
-  )
-  chi_face_el = apply_inner_patch(
-      chi_face_el,
-      dynamic_runtime_params_slice.transport.chie_inner,
-  )
-  d_face_el = apply_inner_patch(
-      d_face_el,
-      dynamic_runtime_params_slice.transport.De_inner,
-  )
-  v_face_el = apply_inner_patch(
-      v_face_el,
-      dynamic_runtime_params_slice.transport.Ve_inner,
-  )
-
-  # Apply outer patch constant transport coefficients.
-  # Due to Pereverzev-Corrigan convection, it is required
-  # for the convection modes to be 'ghost' to avoid numerical instability
-  def apply_outer_patch(original, outer_value):
-    return jnp.where(
-        jnp.logical_and(
-            jnp.logical_and(
-                dynamic_runtime_params_slice.transport.apply_outer_patch,
-                jnp.logical_not(
-                    dynamic_runtime_params_slice.profile_conditions.set_pedestal
-                ),
-            ),
-            geo.rho_face_norm
-            > dynamic_runtime_params_slice.transport.rho_outer - consts.eps,
-        ),
-        outer_value,
-        original,
-    )
-
-  chi_face_ion = apply_outer_patch(
-      chi_face_ion,
-      dynamic_runtime_params_slice.transport.chii_outer,
-  )
-  chi_face_el = apply_outer_patch(
-      chi_face_el,
-      dynamic_runtime_params_slice.transport.chie_outer,
-  )
-  d_face_el = apply_outer_patch(
-      d_face_el,
-      dynamic_runtime_params_slice.transport.De_outer,
-  )
-  v_face_el = apply_outer_patch(
-      v_face_el,
-      dynamic_runtime_params_slice.transport.Ve_outer,
-  )
-
-  # Update the transport coeffs with the new profiles.
-  # This version of the core transport is returned to the caller to help with
-  # inspection.
-  transport_coeffs = dataclasses.replace(
-      transport_coeffs,
-      chi_face_ion=chi_face_ion,
-      chi_face_el=chi_face_el,
-      d_face_el=d_face_el,
-      v_face_el=v_face_el,
-  )
-
   # entire coefficient preceding dT/dr in heat transport equations
   full_chi_face_ion = (
       geo.g1_over_vpr_face * true_ni_face * consts.keV2J * chi_face_ion
@@ -563,7 +464,7 @@ def _calc_coeffs_full(
   source_mat_nn = jnp.zeros_like(geo.rho)
 
   # density source vector based both on original and updated core profiles
-  source_ne = source_operations.sum_sources_ne(geo, merged_source_profiles)
+  source_ne = merged_source_profiles.total_sources('ne', geo)
 
   source_ne += jnp.where(
       dynamic_runtime_params_slice.profile_conditions.set_pedestal,
@@ -655,15 +556,15 @@ def _calc_coeffs_full(
       * consts.mu0
       * geo.Phibdot
       * geo.Phib
-      * j_bootstrap.sigma_face
+      * merged_source_profiles.j_bootstrap.sigma_face
       * geo.rho_face_norm**2
       / geo.F_face**2
   )
 
   # Fill heat transport equation sources. Initialize source matrices to zero
 
-  source_i = source_operations.sum_sources_temp_ion(geo, merged_source_profiles)
-  source_e = source_operations.sum_sources_temp_el(geo, merged_source_profiles)
+  source_i = merged_source_profiles.total_sources('temp_ion', geo)
+  source_e = merged_source_profiles.total_sources('temp_el', geo)
 
   # Add the Qei effects.
   qei = merged_source_profiles.qei
@@ -733,7 +634,8 @@ def _calc_coeffs_full(
   # Add effective phibdot poloidal flux source term
 
   ddrnorm_sigma_rnorm2_over_f2 = jnp.gradient(
-      j_bootstrap.sigma * geo.rho_norm**2 / geo.F**2, geo.rho_norm
+      merged_source_profiles.j_bootstrap.sigma * geo.rho_norm**2 / geo.F**2,
+      geo.rho_norm,
   )
 
   source_psi += (
@@ -845,3 +747,18 @@ def _calc_coeffs_reduced(
       transient_in_cell=transient_in_cell,
   )
   return coeffs
+
+
+# pylint: disable=invalid-name
+def _internal_boundary(
+    geo: geometry.Geometry,
+    Ped_top: jax.Array,
+    set_pedestal: jax.Array,
+) -> jax.Array:
+  # Create Boolean mask FiPy CellVariable with True where the internal boundary
+  # condition is
+  # find index closest to pedestal top.
+  idx = jnp.abs(geo.rho_norm - Ped_top).argmin()
+  mask_np = jnp.zeros(len(geo.rho), dtype=bool)
+  mask_np = jnp.where(set_pedestal, mask_np.at[idx].set(True), mask_np)
+  return mask_np

@@ -14,12 +14,15 @@
 
 """Pydantic utilities and base classes."""
 
+import functools
 from typing import TypeAlias
 import pydantic
 from torax.torax_pydantic import interpolated_param_1d
 from torax.torax_pydantic import interpolated_param_2d
 from torax.torax_pydantic import model_base
+from torax.torax_pydantic import pydantic_types
 from typing_extensions import Annotated
+
 
 TIME_INVARIANT = model_base.TIME_INVARIANT
 
@@ -28,7 +31,10 @@ TIME_INVARIANT = model_base.TIME_INVARIANT
 GreenwaldFraction: TypeAlias = pydantic.PositiveFloat
 KiloElectronVolt: TypeAlias = pydantic.PositiveFloat
 Meter: TypeAlias = pydantic.PositiveFloat
+MeterPerSecond: TypeAlias = float
+MeterSquaredPerSecond: TypeAlias = pydantic.NonNegativeFloat
 Pascal: TypeAlias = pydantic.PositiveFloat
+PositiveMeterSquaredPerSecond: TypeAlias = pydantic.PositiveFloat
 ReferenceDensity: TypeAlias = pydantic.PositiveFloat  # nref
 # Time can sometimes be 0, eg. for the start of an interval.
 Second: TypeAlias = pydantic.NonNegativeFloat
@@ -39,11 +45,20 @@ Density: TypeAlias = GreenwaldFraction | ReferenceDensity
 UnitInterval: TypeAlias = Annotated[float, pydantic.Field(ge=0.0, le=1.0)]
 OpenUnitInterval: TypeAlias = Annotated[float, pydantic.Field(gt=0.0, lt=1.0)]
 
-NumpyArray = model_base.NumpyArray
-NumpyArray1D = model_base.NumpyArray1D
+NumpyArray = pydantic_types.NumpyArray
+NumpyArray1D = pydantic_types.NumpyArray1D
 
-BaseModelMutable = model_base.BaseModelMutable
 BaseModelFrozen = model_base.BaseModelFrozen
 
 TimeVaryingScalar = interpolated_param_1d.TimeVaryingScalar
 TimeVaryingArray = interpolated_param_2d.TimeVaryingArray
+PositiveTimeVaryingScalar = interpolated_param_1d.PositiveTimeVaryingScalar
+UnitIntervalTimeVaryingScalar = (
+    interpolated_param_1d.UnitIntervalTimeVaryingScalar
+)
+PositiveTimeVaryingArray = interpolated_param_2d.PositiveTimeVaryingArray
+
+ValidatedDefault = functools.partial(pydantic.Field, validate_default=True)
+
+Grid1D = interpolated_param_2d.Grid1D
+set_grid = interpolated_param_2d.set_grid
