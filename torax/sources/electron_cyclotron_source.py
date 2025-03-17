@@ -13,82 +13,26 @@
 # limitations under the License.
 
 """Electron cyclotron heating (prescribed Gaussian) and current drive (Lin-Liu model)."""
-
-from __future__ import annotations
-
 import dataclasses
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 import chex
 import jax.numpy as jnp
 from torax import array_typing
 from torax import constants
-from torax import interpolated_param
 from torax import state
 from torax.config import runtime_params_slice
 from torax.geometry import geometry
+from torax.sources import base
 from torax.sources import formulas
 from torax.sources import runtime_params as runtime_params_lib
 from torax.sources import source
 from torax.sources import source_profiles
+from torax.torax_pydantic import torax_pydantic
 
 InterpolatedVarTimeRhoInput = (
     runtime_params_lib.interpolated_param.InterpolatedVarTimeRhoInput
 )
-
-
-@dataclasses.dataclass(kw_only=True)
-class RuntimeParams(runtime_params_lib.RuntimeParams):
-  """Runtime parameters for the electron-cyclotron source."""
-
-  mode: runtime_params_lib.Mode = runtime_params_lib.Mode.MODEL_BASED
-
-  # Local dimensionless current drive efficiency
-  # Zeta from Lin-Liu, Chan, and Prater, 2003, eq 44
-  cd_efficiency: InterpolatedVarTimeRhoInput = dataclasses.field(
-      default_factory=lambda: {0.0: {0.0: 0.2, 1.0: 0.2}}
-  )
-
-  # Manual EC power density profile on the rho grid; units [W/m^3]
-  manual_ec_power_density: InterpolatedVarTimeRhoInput = dataclasses.field(
-      default_factory=lambda: {0.0: {0.0: 0.0, 1.0: 0.0}}
-  )
-
-  # Gaussian EC power density profile; dimensionless [rho_norm]
-  gaussian_ec_power_density_width: runtime_params_lib.TimeInterpolatedInput = (
-      0.1
-  )
-  gaussian_ec_power_density_location: (
-      runtime_params_lib.TimeInterpolatedInput
-  ) = 0.0
-  gaussian_ec_total_power: runtime_params_lib.TimeInterpolatedInput = 0.0
-
-  def make_provider(self, torax_mesh: geometry.Grid1D | None = None):
-    if torax_mesh is None:
-      raise ValueError(
-          "torax_mesh is required for RuntimeParams.make_provider."
-      )
-    return RuntimeParamsProvider(**self.get_provider_kwargs(torax_mesh))
-
-
-@chex.dataclass
-class RuntimeParamsProvider(runtime_params_lib.RuntimeParamsProvider):
-  """Provides runtime parameters for the electron-cyclotron source for a given time and geometry."""
-
-  runtime_params_config: RuntimeParams
-  cd_efficiency: interpolated_param.InterpolatedVarTimeRho
-  manual_ec_power_density: interpolated_param.InterpolatedVarTimeRho
-  gaussian_ec_power_density_width: interpolated_param.InterpolatedVarSingleAxis
-  gaussian_ec_power_density_location: (
-      interpolated_param.InterpolatedVarSingleAxis
-  )
-  gaussian_ec_total_power: interpolated_param.InterpolatedVarSingleAxis
-
-  def build_dynamic_params(
-      self,
-      t: chex.Numeric,
-  ) -> DynamicRuntimeParams:
-    return DynamicRuntimeParams(**self.get_dynamic_params_kwargs(t))
 
 
 @chex.dataclass(frozen=True)
@@ -188,3 +132,61 @@ class ElectronCyclotronSource(source.Source):
   @property
   def affected_core_profiles(self) -> tuple[source.AffectedCoreProfile, ...]:
     return (source.AffectedCoreProfile.TEMP_EL, source.AffectedCoreProfile.PSI)
+
+
+class ElectronCyclotronSourceConfig(base.SourceModelBase):
+  """Config for the electron-cyclotron source.
+
+  Attributes:
+    cd_efficiency: Local dimensionless current drive efficiency. Zeta from
+      Lin-Liu, Chan, and Prater, 2003, eq 44
+    manual_ec_power_density: Manual EC power density profile on the rho grid
+    gaussian_ec_power_density_width: Gaussian EC power density profile width
+    gaussian_ec_power_density_location: Gaussian EC power density profile
+      location
+    gaussian_ec_total_power: Gaussian EC total power
+  """
+
+  source_name: Literal["electron_cyclotron_source"] = (
+      "electron_cyclotron_source"
+  )
+  cd_efficiency: torax_pydantic.TimeVaryingArray = (
+      torax_pydantic.ValidatedDefault({0.0: {0.0: 0.2, 1.0: 0.2}})
+  )
+  manual_ec_power_density: torax_pydantic.TimeVaryingArray = (
+      torax_pydantic.ValidatedDefault({0.0: {0.0: 0.0, 1.0: 0.0}})
+  )
+  gaussian_ec_power_density_width: torax_pydantic.TimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(0.1)
+  )
+  gaussian_ec_power_density_location: torax_pydantic.TimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(0.0)
+  )
+  gaussian_ec_total_power: torax_pydantic.TimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(0.0)
+  )
+  mode: runtime_params_lib.Mode = runtime_params_lib.Mode.MODEL_BASED
+
+  @property
+  def model_func(self) -> source.SourceProfileFunction:
+    return calc_heating_and_current
+
+  def build_dynamic_params(
+      self,
+      t: chex.Numeric,
+  ) -> DynamicRuntimeParams:
+    return DynamicRuntimeParams(
+        prescribed_values=self.prescribed_values.get_value(t),
+        cd_efficiency=self.cd_efficiency.get_value(t),
+        manual_ec_power_density=self.manual_ec_power_density.get_value(t),
+        gaussian_ec_power_density_width=self.gaussian_ec_power_density_width.get_value(
+            t
+        ),
+        gaussian_ec_power_density_location=self.gaussian_ec_power_density_location.get_value(
+            t
+        ),
+        gaussian_ec_total_power=self.gaussian_ec_total_power.get_value(t),
+    )
+
+  def build_source(self):
+    return ElectronCyclotronSource(model_func=self.model_func)

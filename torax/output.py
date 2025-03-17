@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Module containing functions for saving and loading simulation output."""
-from __future__ import annotations
 
 import dataclasses
 import inspect
@@ -23,10 +22,10 @@ import chex
 import jax
 from jax import numpy as jnp
 from torax import state
-from torax.config import runtime_params
 from torax.geometry import geometry as geometry_lib
 from torax.sources import source_models as source_models_lib
 from torax.sources import source_profiles
+from torax.torax_pydantic import file_restart as file_restart_pydantic_model
 import xarray as xr
 
 import os
@@ -69,10 +68,7 @@ NI_RIGHT_BC = "ni_right_bc"
 JTOT = "jtot"
 JTOT_FACE = "jtot_face"
 JOHM = "johm"
-# TODO(b/338033916): rename when we have a solution for hierarchical outputs.
-# Add `core_profiles` prefix here to avoid name clash with
-# core_sources.generic_current.
-CORE_PROFILES_EXTERNAL_CURRENT = "external_current_source"
+EXTERNAL_CURRENT = "external_current_source"
 J_BOOTSTRAP = "j_bootstrap"
 J_BOOTSTRAP_FACE = "j_bootstrap_face"
 I_BOOTSTRAP = "I_bootstrap"
@@ -83,6 +79,7 @@ NREF = "nref"
 ZIMP = "Zimp"
 NIMP = "nimp"
 IP_PROFILE_FACE = "Ip_profile_face"
+IP_TOTAL = "Ip_total"
 VLOOP_LCFS = "vloop_lcfs"
 
 # Core transport.
@@ -112,7 +109,8 @@ SIM_ERROR = "sim_error"
 # Sources.
 CORE_SOURCES = "core_sources"
 
-# Excluded coordinates from geometry since they are at the top DataTree level
+# Excluded coordinates from geometry since they are at the top DataTree level.
+# Exclude q_correction_factor as it is not an interesting quantity to save.
 # TODO(b/338033916): consolidate on either rho or rho_cell naming for cell grid
 EXCLUDED_GEOMETRY_NAMES = frozenset({
     RHO_CELL,
@@ -121,6 +119,7 @@ EXCLUDED_GEOMETRY_NAMES = frozenset({
     RHO_FACE_NORM,
     "rho",
     "rho_norm",
+    "q_correction_factor",
 })
 
 
@@ -177,7 +176,7 @@ def concat_datatrees(
 
 
 def stitch_state_files(
-    file_restart: runtime_params.FileRestart, datatree: xr.DataTree
+    file_restart: file_restart_pydantic_model.FileRestart, datatree: xr.DataTree
 ) -> xr.DataTree:
   """Stitch a datatree to the end of a previous state file.
 
@@ -306,13 +305,14 @@ class StateHistory:
     xr_dict[JTOT] = self.core_profiles.currents.jtot
     xr_dict[JTOT_FACE] = self.core_profiles.currents.jtot_face
     xr_dict[JOHM] = self.core_profiles.currents.johm
-    xr_dict[CORE_PROFILES_EXTERNAL_CURRENT] = (
+    xr_dict[EXTERNAL_CURRENT] = (
         self.core_profiles.currents.external_current_source
     )
 
     xr_dict[J_BOOTSTRAP] = self.core_profiles.currents.j_bootstrap
     xr_dict[J_BOOTSTRAP_FACE] = self.core_profiles.currents.j_bootstrap_face
     xr_dict[IP_PROFILE_FACE] = self.core_profiles.currents.Ip_profile_face
+    xr_dict[IP_TOTAL] = self.core_profiles.currents.Ip_total
     xr_dict[I_BOOTSTRAP] = self.core_profiles.currents.I_bootstrap
     xr_dict[SIGMA] = self.core_profiles.currents.sigma
 
@@ -429,7 +429,7 @@ class StateHistory:
 
   def simulation_output_to_xr(
       self,
-      file_restart: runtime_params.FileRestart | None = None,
+      file_restart: file_restart_pydantic_model.FileRestart | None = None,
   ) -> xr.DataTree:
     """Build an xr.DataTree of the simulation output.
 

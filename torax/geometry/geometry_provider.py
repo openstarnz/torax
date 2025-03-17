@@ -17,9 +17,6 @@
 NOTE: Time dependent providers currently live in `geometry.py` and match the
 protocol defined here.
 """
-
-from __future__ import annotations
-
 from collections.abc import Mapping
 import dataclasses
 import functools
@@ -30,7 +27,8 @@ import numpy as np
 from torax import interpolated_param
 from torax import jax_utils
 from torax.geometry import geometry
-
+from torax.torax_pydantic import torax_pydantic
+import typing_extensions
 
 # Using invalid-name because we are using the same naming convention as the
 # external physics implementations
@@ -86,7 +84,7 @@ class GeometryProvider(Protocol):
     """
 
   @property
-  def torax_mesh(self) -> geometry.Grid1D:
+  def torax_mesh(self) -> torax_pydantic.Grid1D:
     """Returns the mesh used by Torax, this is consistent across time."""
 
 
@@ -103,7 +101,7 @@ class ConstantGeometryProvider(GeometryProvider):
     return self._geo
 
   @property
-  def torax_mesh(self) -> geometry.Grid1D:
+  def torax_mesh(self) -> torax_pydantic.Grid1D:
     return self._geo.torax_mesh
 
 
@@ -112,7 +110,7 @@ class TimeDependentGeometryProvider:
   """A geometry provider which holds values to interpolate based on time."""
 
   geometry_type: geometry.GeometryType
-  torax_mesh: geometry.Grid1D
+  torax_mesh: torax_pydantic.Grid1D
   drho_norm: interpolated_param.InterpolatedVarSingleAxis
   rho_b: interpolated_param.InterpolatedVarSingleAxis
   Rmaj: interpolated_param.InterpolatedVarSingleAxis
@@ -155,7 +153,7 @@ class TimeDependentGeometryProvider:
   @classmethod
   def create_provider(
       cls, geometries: Mapping[float, geometry.Geometry]
-  ) -> TimeDependentGeometryProvider:
+  ) -> typing_extensions.Self:
     """Creates a GeometryProvider from a mapping of times to geometries."""
     # Create a list of times and geometries.
     times = np.asarray(list(geometries.keys()))
@@ -223,4 +221,3 @@ class TimeDependentGeometryProvider:
   def __call__(self, t: chex.Numeric) -> geometry.Geometry:
     """Returns a Geometry instance at the given time."""
     return self._get_geometry_base(t, geometry.Geometry)
-

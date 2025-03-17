@@ -17,11 +17,10 @@ from absl.testing import absltest
 from absl.testing import parameterized
 import numpy as np
 from torax import constants
-from torax import core_profile_setters
-from torax import interpolated_param
-from torax.config import plasma_composition
-from torax.config import runtime_params_slice
+from torax.config import build_runtime_params
+from torax.core_profiles import initialization
 from torax.sources import fusion_heat_source
+from torax.sources import pydantic_model as sources_pydantic_model
 from torax.sources import source_models as source_models_lib
 from torax.sources.tests import test_lib
 from torax.tests.test_lib import torax_refs
@@ -30,13 +29,11 @@ from torax.tests.test_lib import torax_refs
 class FusionHeatSourceTest(test_lib.IonElSourceTestCase):
   """Tests for FusionHeatSource."""
 
-  @classmethod
-  def setUpClass(cls):
-    super().setUpClass(
-        source_class=fusion_heat_source.FusionHeatSource,
-        runtime_params_class=fusion_heat_source.FusionHeatSourceRuntimeParams,
+  def setUp(self):
+    super().setUp(
         source_name=fusion_heat_source.FusionHeatSource.SOURCE_NAME,
-        model_func=fusion_heat_source.fusion_heat_model_func,
+        source_config_class=fusion_heat_source.FusionHeatSourceConfig,
+        needs_source_models=True,
     )
 
   @parameterized.parameters([
@@ -54,21 +51,25 @@ class FusionHeatSourceTest(test_lib.IonElSourceTestCase):
 
     runtime_params = references.runtime_params
 
-    source_models_builder = source_models_lib.SourceModelsBuilder()
+    sources = sources_pydantic_model.Sources.from_dict({
+        fusion_heat_source.FusionHeatSource.SOURCE_NAME: {},
+    })
     dynamic_runtime_params_slice, geo = (
         torax_refs.build_consistent_dynamic_runtime_params_slice_and_geometry(
             runtime_params,
             references.geometry_provider,
-            sources=source_models_builder.runtime_params,
+            sources=sources,
         )
     )
-    static_slice = runtime_params_slice.build_static_runtime_params_slice(
+    static_slice = build_runtime_params.build_static_runtime_params_slice(
         runtime_params=runtime_params,
-        source_runtime_params=source_models_builder.runtime_params,
+        sources=sources,
         torax_mesh=geo.torax_mesh,
     )
-    source_models = source_models_builder()
-    core_profiles = core_profile_setters.initial_core_profiles(
+    source_models = source_models_lib.SourceModels(
+        sources=sources.source_model_config
+    )
+    core_profiles = initialization.initial_core_profiles(
         dynamic_runtime_params_slice=dynamic_runtime_params_slice,
         static_runtime_params_slice=static_slice,
         geo=geo,
@@ -89,17 +90,15 @@ class FusionHeatSourceTest(test_lib.IonElSourceTestCase):
     np.testing.assert_allclose(torax_fusion_power, reference_fusion_power)
 
   @parameterized.named_parameters(
-      ('no_fusion_D', 'D', 0.0),
-      ('no_fusion_T', 'T', 0.0),
+      ('no_fusion_D', {'D': 1.0}, 0.0),
+      ('no_fusion_T', {'T': 1.0}, 0.0),
       ('no_fusion_HT', {'H': 0.5, 'T': 0.5}, 0.0),
       ('50-50-DT', {'D': 0.5, 'T': 0.5}, 1.0),
       ('25-75-DT', {'D': 0.25, 'T': 0.75}, 0.75),
   )
   def test_calc_fusion_different_ion_mixtures(
       self,
-      main_ion_input: (
-          str | Mapping[str, interpolated_param.TimeInterpolatedInput]
-      ),
+      main_ion_input: str | Mapping[str, float],
       expected_fusion_factor: float,
   ):
     """Compare `calc_fusion` function to a reference implementation for various ion mixtures."""
@@ -107,26 +106,30 @@ class FusionHeatSourceTest(test_lib.IonElSourceTestCase):
 
     runtime_params = references.runtime_params
 
-    runtime_params.plasma_composition.main_ion_mixture = (
-        plasma_composition.IonMixture.from_config(main_ion_input)
+    runtime_params._update_fields(
+        {'plasma_composition.main_ion': main_ion_input}
     )
 
-    source_models_builder = source_models_lib.SourceModelsBuilder()
+    sources = sources_pydantic_model.Sources.from_dict({
+        fusion_heat_source.FusionHeatSource.SOURCE_NAME: {},
+    })
     dynamic_runtime_params_slice_t, geo = (
         torax_refs.build_consistent_dynamic_runtime_params_slice_and_geometry(
             runtime_params,
             references.geometry_provider,
-            sources=source_models_builder.runtime_params,
+            sources=sources,
             t=0.0,  # arbitrary since we don't use time-dependent params
         )
     )
-    static_slice = runtime_params_slice.build_static_runtime_params_slice(
+    static_slice = build_runtime_params.build_static_runtime_params_slice(
         runtime_params=runtime_params,
-        source_runtime_params=source_models_builder.runtime_params,
+        sources=sources,
         torax_mesh=geo.torax_mesh,
     )
-    source_models = source_models_builder()
-    core_profiles = core_profile_setters.initial_core_profiles(
+    source_models = source_models_lib.SourceModels(
+        sources=sources.source_model_config
+    )
+    core_profiles = initialization.initial_core_profiles(
         dynamic_runtime_params_slice=dynamic_runtime_params_slice_t,
         static_runtime_params_slice=static_slice,
         geo=geo,

@@ -13,14 +13,11 @@
 # limitations under the License.
 
 """A transport model that uses a QLKNN model."""
-
-from __future__ import annotations
-
 import dataclasses
 import functools
 import logging
 import os
-from typing import Callable, Final
+from typing import Final
 
 import chex
 import jax
@@ -33,9 +30,7 @@ from torax.transport_model import base_qlknn_model
 from torax.transport_model import qlknn_10d
 from torax.transport_model import qlknn_model_wrapper
 from torax.transport_model import qualikiz_based_transport_model
-from torax.transport_model import runtime_params as runtime_params_lib
-from torax.transport_model import transport_model
-
+import typing_extensions
 
 # Environment variable for the QLKNN model. Used if the model path
 # is not set in the config.
@@ -49,51 +44,7 @@ def get_default_model_path() -> str:
   return os.environ.get(MODEL_PATH_ENV_VAR, DEFAULT_MODEL_PATH)
 
 
-def get_default_runtime_params_from_model_path(
-    model_path: str,
-) -> RuntimeParams:
-  """Returns default runtime params for the model version given the path."""
-  version = _get_model(model_path).version
-  if version == '10D':
-    return RuntimeParams(
-        # Correction factor to a more recent QLK collision operator.
-        coll_mult=0.25,
-        # The QLK version this specific QLKNN was trained on tends to
-        # underpredict ITG electron heat flux in shaped, high-beta scenarios.
-        ITG_flux_ratio_correction=2.0,
-    )
-  elif version == '11D':
-    return RuntimeParams()
-  else:
-    raise ValueError(f'Unknown model version: {version}')
-
-
 # pylint: disable=invalid-name
-@chex.dataclass
-class RuntimeParams(qualikiz_based_transport_model.RuntimeParams):
-  """Extends the base runtime params with additional params for this model.
-
-  See base class runtime_params.RuntimeParams docstring for more info.
-  """
-
-  include_ITG: bool = True  # to toggle ITG modes on or off
-  include_TEM: bool = True  # to toggle TEM modes on or off
-  include_ETG: bool = True  # to toggle ETG modes on or off
-  # This is a correction factor for ITG electron heat flux.
-  ITG_flux_ratio_correction: float = 1.0
-  # Correction factor to account for multiscale correction in Qualikiz ETG.
-  # https://gitlab.com/qualikiz-group/QuaLiKiz/-/commit/5bcd3161c1b08e0272ab3c9412fec7f9345a2eef
-  ETG_correction_factor: float = 1.0 / 3.0
-  # clip inputs within desired margin of the QLKNN training set boundaries
-  clip_inputs: bool = False
-  clip_margin: float = 0.95
-
-  def make_provider(
-      self, torax_mesh: geometry.Grid1D | None = None
-  ) -> 'RuntimeParamsProvider':
-    return RuntimeParamsProvider(**self.get_provider_kwargs(torax_mesh))
-
-
 @chex.dataclass(frozen=True)
 class DynamicRuntimeParams(qualikiz_based_transport_model.DynamicRuntimeParams):
   include_ITG: bool
@@ -105,16 +56,6 @@ class DynamicRuntimeParams(qualikiz_based_transport_model.DynamicRuntimeParams):
   clip_margin: float
 
 
-@chex.dataclass
-class RuntimeParamsProvider(runtime_params_lib.RuntimeParamsProvider):
-  """Provides a RuntimeParams to use during time t of the sim."""
-
-  runtime_params_config: RuntimeParams
-
-  def build_dynamic_params(self, t: chex.Numeric) -> DynamicRuntimeParams:
-    return DynamicRuntimeParams(**self.get_dynamic_params_kwargs(t))
-
-
 _EPSILON_NN: Final[float] = (
     1 / 3
 )  # fixed inverse aspect ratio used to train QLKNN10D
@@ -122,7 +63,7 @@ _EPSILON_NN: Final[float] = (
 
 # Memoize, but evict the old model if a new path is given.
 @functools.lru_cache(maxsize=1)
-def _get_model(path: str) -> base_qlknn_model.BaseQLKNNModel:
+def get_model(path: str) -> base_qlknn_model.BaseQLKNNModel:
   """Load the model."""
   logging.info('Loading model from %s', path)
   try:
@@ -152,7 +93,6 @@ class QLKNNRuntimeConfigInputs:
   transport: DynamicRuntimeParams
   Ped_top: float
   set_pedestal: bool
-  q_correction_factor: float
   # pylint: enable=invalid-name
 
   @staticmethod
@@ -169,7 +109,6 @@ class QLKNNRuntimeConfigInputs:
         transport=dynamic_runtime_params_slice.transport,
         Ped_top=pedestal_model_output.rho_norm_ped_top,
         set_pedestal=dynamic_runtime_params_slice.profile_conditions.set_pedestal,
-        q_correction_factor=dynamic_runtime_params_slice.numerics.q_correction_factor,
     )
 
 
@@ -304,12 +243,11 @@ class QLKNNTransportModel(
     qualikiz_inputs = self._prepare_qualikiz_inputs(
         Zeff_face=runtime_config_inputs.Zeff_face,
         nref=runtime_config_inputs.nref,
-        q_correction_factor=runtime_config_inputs.q_correction_factor,
         transport=runtime_config_inputs.transport,
         geo=geo,
         core_profiles=core_profiles,
     )
-    model = _get_model(self._model_path)
+    model = get_model(self._model_path)
 
     # To take into account a different aspect ratio compared to the qlknn
     # training set, the qlknn input normalized radius needs to be rescaled by
@@ -369,36 +307,8 @@ class QLKNNTransportModel(
   def __hash__(self) -> int:
     return hash(('QLKNNTransportModel' + self._model_path))
 
-  def __eq__(self, other: QLKNNTransportModel) -> bool:
+  def __eq__(self, other: typing_extensions.Self) -> bool:
     return (
         isinstance(other, QLKNNTransportModel)
         and self.model_path == other.model_path
     )
-
-
-def _default_qlknn_builder(model_path: str) -> QLKNNTransportModel:
-  return QLKNNTransportModel(model_path)
-
-
-@dataclasses.dataclass(kw_only=True)
-class QLKNNTransportModelBuilder(transport_model.TransportModelBuilder):
-  """Builds a class QLKNNTransportModel."""
-
-  runtime_params: RuntimeParams | None = None
-  model_path: str = dataclasses.field(default_factory=get_default_model_path)
-
-  def __post_init__(self):
-    if self.runtime_params is None:
-      self.runtime_params = get_default_runtime_params_from_model_path(
-          self.model_path
-      )
-
-  _builder: Callable[
-      [str],
-      QLKNNTransportModel,
-  ] = _default_qlknn_builder
-
-  def __call__(
-      self,
-  ) -> QLKNNTransportModel:
-    return self._builder(self.model_path)

@@ -13,51 +13,23 @@
 # limitations under the License.
 
 """Collisional ion-electron heat source."""
-
-from __future__ import annotations
-
 import dataclasses
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 import chex
 import jax
 from jax import numpy as jnp
-from torax import physics
 from torax import state
 from torax.config import runtime_params_slice
 from torax.geometry import geometry
+from torax.physics import collisions
+from torax.sources import base
 from torax.sources import runtime_params as runtime_params_lib
 from torax.sources import source
 from torax.sources import source_profiles
 
 
 # pylint: disable=invalid-name
-@dataclasses.dataclass(kw_only=True)
-class RuntimeParams(runtime_params_lib.RuntimeParams):
-  # multiplier for ion-electron heat exchange term for sensitivity testing
-  Qei_mult: float = 1.0
-  mode: runtime_params_lib.Mode = runtime_params_lib.Mode.MODEL_BASED
-
-  def make_provider(
-      self,
-      torax_mesh: geometry.Grid1D | None = None,
-  ) -> 'RuntimeParamsProvider':
-    return RuntimeParamsProvider(**self.get_provider_kwargs(torax_mesh))
-
-
-@chex.dataclass
-class RuntimeParamsProvider(runtime_params_lib.RuntimeParamsProvider):
-  """Provides runtime parameters for a given time and geometry."""
-
-  runtime_params_config: RuntimeParams
-
-  def build_dynamic_params(
-      self,
-      t: chex.Numeric,
-  ) -> 'DynamicRuntimeParams':
-    return DynamicRuntimeParams(**self.get_dynamic_params_kwargs(t))
-
-
 @chex.dataclass(frozen=True)
 class DynamicRuntimeParams(runtime_params_lib.DynamicRuntimeParams):
   Qei_mult: float
@@ -137,7 +109,7 @@ def _model_based_qei(
   """Computes Qei via the coll_exchange model."""
   assert isinstance(dynamic_source_runtime_params, DynamicRuntimeParams)
   zeros = jnp.zeros_like(geo.rho_norm)
-  qei_coef = physics.coll_exchange(
+  qei_coef = collisions.coll_exchange(
       core_profiles=core_profiles,
       nref=dynamic_runtime_params_slice.numerics.nref,
       Qei_mult=dynamic_source_runtime_params.Qei_mult,
@@ -176,4 +148,30 @@ def _model_based_qei(
   )
 
 
-# pylint: enable=invalid-name
+class QeiSourceConfig(base.SourceModelBase):
+  """Configuration for the QeiSource.
+
+  Attributes:
+    Qei_mult: multiplier for ion-electron heat exchange term for sensitivity
+      testing
+  """
+
+  source_name: Literal['qei_source'] = 'qei_source'
+  Qei_mult: float = 1.0
+  mode: runtime_params_lib.Mode = runtime_params_lib.Mode.MODEL_BASED
+
+  @property
+  def model_func(self) -> None:
+    return None
+
+  def build_dynamic_params(
+      self,
+      t: chex.Numeric,
+  ) -> DynamicRuntimeParams:
+    return DynamicRuntimeParams(
+        prescribed_values=self.prescribed_values.get_value(t),
+        Qei_mult=self.Qei_mult,
+    )
+
+  def build_source(self) -> QeiSource:
+    return QeiSource(model_func=self.model_func)
