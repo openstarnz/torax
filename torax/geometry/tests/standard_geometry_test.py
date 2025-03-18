@@ -79,6 +79,15 @@ class GeometryTest(parameterized.TestCase):
     config.build_geometry()
 
     # Ensure that the geometry is (approximately) correct at the magnetic axis
+    intermediate = standard_geometry.StandardGeometryIntermediates.from_eqdsk(
+      config.geometry_dir,
+      config.geometry_file,
+      config.hires_fac,
+      config.Ip_from_parameters,
+      config.n_rho,
+      config.n_surfaces,
+      config.last_surface_factor,
+    )
     np.testing.assert_almost_equal(intermediate.Rin[0], intermediate.Rout[0], decimal=3)
     np.testing.assert_almost_equal(intermediate.int_dl_over_Bp[0], 0, decimal=1)
     np.testing.assert_almost_equal(intermediate.flux_surf_avg_1_over_R2[0], 1 / intermediate.Rin[0] ** 2, decimal=4)
