@@ -425,9 +425,6 @@ Configures simulation control such as time settings and timestep calculation, eq
 ``dens_eq`` (bool = False)
   Solve the electron density equation in the time-dependent PDE.
 
-``q_correction_factor`` (float = 1.38)
-  q-profile correction factor used only in the ad-hoc circular geometry model
-
 ``resistivity_mult`` (float = 1.0)
   1/multiplication factor for :math:`\sigma` (conductivity) to reduce the current
   diffusion timescale to be closer to the energy confinement timescale, for testing purposes.
@@ -789,6 +786,22 @@ Runtime parameters for the Bohm-GyroBohm model, defined within a
 
 ``chi_i_gyrobohm_coeff`` (float = 5e-6), **time-varying-scalar**
   Prefactor for GyroBohm term for ion heat conductivity.
+
+``chi_e_bohm_multiplier`` (float = 1.0), **time-varying-scalar**
+  Multiplier for Bohm term for electron heat conductivity. Intended for
+  user-friendly default modification.
+
+``chi_e_gyrobohm_multiplier`` (float = 1.0), **time-varying-scalar**
+  Multiplier for GyroBohm term for electron heat conductivity. Intended for
+  user-friendly default modification.
+
+``chi_i_bohm_multiplier`` (float = 1.0), **time-varying-scalar**
+  Multiplier for Bohm term for ion heat conductivity. Intended for
+  user-friendly default modification.
+
+``chi_i_gyrobohm_multiplier`` (float = 1.0), **time-varying-scalar**
+  Multiplier for GyroBohm term for ion heat conductivity. Intended for
+  user-friendly default modification.
 
 ``d_face_c1`` (float = 1.0), **time-varying-scalar**
   Constant for the electron diffusivity weighting factor.
@@ -1174,7 +1187,8 @@ stepper
 -------
 
 Select and configure the ``Stepper`` object, which evolves the PDE system by one timestep. See :ref:`solver_details` for further details.
-The dictionary consists of keys common to all steppers, and additional nested dictionaries where parameters pertaining to a specific stepper are defined.
+The dictionary consists of keys common to all steppers. Additional fields for
+parameters pertaining to a specific stepper are defined in the relevant section below.
 
 ``stepper_type`` (str = 'linear')
   Selected PDE solver algorithm. The current options are:
@@ -1229,8 +1243,6 @@ parent ``Stepper`` class.
 newton_raphson
 ^^^^^^^^^^^^^^
 
-``newton_raphson_params`` dict containing the following configuration parameters for the Newton Raphson stepper.
-
 .. _log_iterations:
 
 ``log_iterations`` (bool = False)
@@ -1252,6 +1264,9 @@ newton_raphson
 
 * ``linear_step``
     Use the linear solver to obtain an initial guess to warm-start the nonlinear solver.
+    If used, is recommended to do so with the predictor_corrector solver and
+    several corrector steps. It is also strongly recommended to
+    use_pereverzev=True if a stiff transport model like qlknn is used.
 
 ``tol`` (float = 1e-5)
   PDE residual magnitude tolerance for successfully exiting the iterative solver.
@@ -1278,8 +1293,6 @@ newton_raphson
 optimizer
 ^^^^^^^^^
 
-``optimizer_params`` dict containing the following configuration parameters for the Optimizer stepper.
-
 ``initial_guess_mode`` (str = 'linear_step')
   Sets the approach taken for the initial guess into the Newton-Raphson solver for the first iteration.
   Two options are available:
@@ -1289,9 +1302,15 @@ optimizer
 
 * ``linear_step``
     Use the linear solver to obtain an initial guess to warm-start the nonlinear solver.
+    If used, is recommended to do so with the predictor_corrector solver and
+    several corrector steps. It is also strongly recommended to
+    use_pereverzev=True if a stiff transport model like qlknn is used.
 
 ``tol`` (float = 1e-12)
   PDE loss magnitude tolerance for successfully exiting the iterative solver.
+  Note: the default tolerance here is smaller than the default tolerance for
+  the Newton-Raphson solver because it's a tolerance on the loss (square of the
+  residual).
 
 ``maxiter`` (int = 100)
   Maximum number of allowed optimizer iterations.
@@ -1440,9 +1459,6 @@ The configuration file is also available in ``torax/examples/iterhybrid_rampup.p
           'smoothing_sigma': 0.1,
           'qlknn_params': {
               'DVeff': True,
-              'include_ITG': True,
-              'include_TEM': True,
-              'include_ETG': True,
               'avoid_big_negative_s': True,
               'An_min': 0.05,
               'ITG_flux_ratio_correction': 1,

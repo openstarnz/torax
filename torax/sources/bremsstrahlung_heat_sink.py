@@ -12,49 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Many variables throughout this function are capitalized based on physics
-# notational conventions rather than on Google Python style
 # pylint: disable=invalid-name
 
 """Bremsstrahlung heat sink for electron heat equation.."""
-
 import dataclasses
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 import chex
 import jax
 from jax import numpy as jnp
+from torax import math_utils
 from torax import state
 from torax.config import runtime_params_slice
 from torax.geometry import geometry
+from torax.sources import base
 from torax.sources import runtime_params as runtime_params_lib
 from torax.sources import source
 from torax.sources import source_profiles
-
-
-@dataclasses.dataclass(kw_only=True)
-class RuntimeParams(runtime_params_lib.RuntimeParams):
-  use_relativistic_correction: bool = False
-  mode: runtime_params_lib.Mode = runtime_params_lib.Mode.MODEL_BASED
-
-  def make_provider(
-      self,
-      torax_mesh: geometry.Grid1D | None = None,
-  ) -> 'RuntimeParamsProvider':
-    return RuntimeParamsProvider(**self.get_provider_kwargs(torax_mesh))
-
-
-@chex.dataclass
-class RuntimeParamsProvider(runtime_params_lib.RuntimeParamsProvider):
-  """Provides runtime parameters for a given time and geometry."""
-
-  runtime_params_config: RuntimeParams
-
-  def build_dynamic_params(
-      self,
-      t: chex.Numeric,
-  ) -> 'DynamicRuntimeParams':
-    return DynamicRuntimeParams(**self.get_dynamic_params_kwargs(t))
 
 
 @chex.dataclass(frozen=True)
@@ -114,9 +88,7 @@ def calc_bremsstrahlung(
   P_brem_profile_cell = geometry.face_to_cell(P_brem_profile_face) * 1e6
 
   # In MW
-  P_brem_total = jax.scipy.integrate.trapezoid(
-      P_brem_profile_face * geo.vpr_face, geo.rho_face_norm
-  )
+  P_brem_total = math_utils.volume_integration(P_brem_profile_cell, geo)
   return P_brem_total, P_brem_profile_cell
 
 
@@ -159,3 +131,31 @@ class BremsstrahlungHeatSink(source.Source):
   @property
   def affected_core_profiles(self) -> tuple[source.AffectedCoreProfile, ...]:
     return (source.AffectedCoreProfile.TEMP_EL,)
+
+
+class BremsstrahlungHeatSinkConfig(base.SourceModelBase):
+  """Bremsstrahlung heat sink for electron heat equation.
+
+  Attributes:
+    use_relativistic_correction: Whether to use relativistic correction.
+  """
+
+  source_name: Literal['bremsstrahlung_heat_sink'] = 'bremsstrahlung_heat_sink'
+  use_relativistic_correction: bool = False
+  mode: runtime_params_lib.Mode = runtime_params_lib.Mode.MODEL_BASED
+
+  @property
+  def model_func(self) -> source.SourceProfileFunction:
+    return bremsstrahlung_model_func
+
+  def build_dynamic_params(
+      self,
+      t: chex.Numeric,
+  ) -> 'DynamicRuntimeParams':
+    return DynamicRuntimeParams(
+        prescribed_values=self.prescribed_values.get_value(t),
+        use_relativistic_correction=self.use_relativistic_correction,
+    )
+
+  def build_source(self) -> BremsstrahlungHeatSink:
+    return BremsstrahlungHeatSink(model_func=self.model_func)

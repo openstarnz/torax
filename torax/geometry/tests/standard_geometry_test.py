@@ -18,9 +18,9 @@ from absl.testing import absltest
 from absl.testing import parameterized
 import jax
 import numpy as np
-from torax.config import build_sim
 from torax.geometry import geometry
 from torax.geometry import geometry_loader
+from torax.geometry import pydantic_model as geometry_pydantic_model
 from torax.geometry import standard_geometry
 
 # Internal import.
@@ -48,8 +48,8 @@ class GeometryTest(parameterized.TestCase):
         psi=np.arange(0, 1.0, 0.01),
         Ip_profile=np.arange(0, 1.0, 0.01),
         Phi=np.arange(0, 1.0, 0.01),
-        Rin=np.arange(0, 1.0, 0.01),
-        Rout=np.arange(0, 1.0, 0.01),
+        Rin=np.arange(1, 2, 0.01),
+        Rout=np.arange(1, 2, 0.01),
         F=np.arange(0, 1.0, 0.01),
         int_dl_over_Bp=np.arange(0, 1.0, 0.01),
         flux_surf_avg_1_over_R2=np.arange(0, 1.0, 0.01),
@@ -67,8 +67,7 @@ class GeometryTest(parameterized.TestCase):
     foo(geo)
 
   def test_build_geometry_from_chease(self):
-    intermediate = standard_geometry.StandardGeometryIntermediates.from_chease()
-    standard_geometry.build_standard_geometry(intermediate)
+    geometry_pydantic_model.CheaseConfig().build_geometry()
 
   @parameterized.parameters([
       dict(geometry_file='eqdsk_cocos02.eqdsk'),
@@ -76,10 +75,8 @@ class GeometryTest(parameterized.TestCase):
   ])
   def test_build_geometry_from_eqdsk(self, geometry_file):
     """Test that EQDSK geometries can be built."""
-    intermediate = standard_geometry.StandardGeometryIntermediates.from_eqdsk(
-        geometry_file=geometry_file
-    )
-    standard_geometry.build_standard_geometry(intermediate)
+    config = geometry_pydantic_model.EQDSKConfig(geometry_file=geometry_file)
+    config.build_geometry()
 
     # Ensure that the geometry is (approximately) correct at the magnetic axis
     np.testing.assert_almost_equal(intermediate.Rin[0], intermediate.Rout[0], decimal=3)
@@ -92,8 +89,7 @@ class GeometryTest(parameterized.TestCase):
 
   def test_access_z_magnetic_axis_raises_error_for_chease_geometry(self):
     """Test that accessing z_magnetic_axis raises error for CHEASE geometry."""
-    intermediate = standard_geometry.StandardGeometryIntermediates.from_chease()
-    geo = standard_geometry.build_standard_geometry(intermediate)
+    geo = geometry_pydantic_model.CheaseConfig().build_geometry()
     with self.assertRaisesRegex(ValueError, 'does not have a z magnetic axis'):
       geo.z_magnetic_axis()
 
