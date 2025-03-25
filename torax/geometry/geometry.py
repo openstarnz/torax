@@ -285,32 +285,17 @@ class Geometry:
   @property
   def g0_over_vpr_face(self) -> jax.Array:
     """g0_face/vpr_face [:math:`m^{-1}`], equal to 1/rho_b on-axis."""
-    # Calculate the bulk of the array (excluding the first element)
-    # to avoid division by zero.
-    bulk = self.g0_face[..., 1:] / self.vpr_face[..., 1:]
-    first_element = jnp.ones_like(self.rho_b) / self.rho_b
-    # Concatenate to handle both 1D (no leading dim) and 2D cases
-    return jnp.concatenate(
-        [jnp.expand_dims(first_element, axis=-1), bulk], axis=-1
-    )
+    return jnp.nan_to_num(self.g0_face / self.vpr_face, nan=jnp.expand_dims(jnp.ones_like(self.rho_b) / self.rho_b, axis=-1))
 
   @property
   def g1_over_vpr_face(self) -> jax.Array:
     r"""g1_face/vpr_face [:math:`\mathrm{m}`]. Zero on-axis."""
-    bulk = self.g1_face[..., 1:] / self.vpr_face[..., 1:]
-    first_element = jnp.zeros_like(self.rho_b)
-    return jnp.concatenate(
-        [jnp.expand_dims(first_element, axis=-1), bulk], axis=-1
-    )
+    return jnp.nan_to_num(self.g1_face / self.vpr_face, nan=0.0)
 
   @property
   def g1_over_vpr2_face(self) -> jax.Array:
     """g1_face/vpr_face**2 [:math:`m^{-2}`], equal to 1/rho_b**2 on-axis."""
-    bulk = self.g1_face[..., 1:] / self.vpr_face[..., 1:] ** 2
-    first_element = jnp.ones_like(self.rho_b) / self.rho_b**2
-    return jnp.concatenate(
-        [jnp.expand_dims(first_element, axis=-1), bulk], axis=-1
-    )
+    return jnp.nan_to_num(self.g1_face / self.vpr_face ** 2, nan=jnp.expand_dims(jnp.ones_like(self.rho_b) / self.rho_b**2, axis=-1))
 
   def z_magnetic_axis(self) -> chex.Numeric:
     """z position of magnetic axis [m]."""
