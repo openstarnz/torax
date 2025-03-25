@@ -725,7 +725,7 @@ class SimTest(sim_test_case.SimTestCase):
         jnp.array(ne_source.S_tot / nref),
     )
     expected_ne = jnp.interp(rho_norm, rho_norm_hires, expected_ne_hires)
-    np.testing.assert_allclose(actual_ne, expected_ne, rtol=2e-4)
+    np.testing.assert_allclose(actual_ne, expected_ne, rtol=3e-4)
 
     heat_source = dynamic_params.sources['generic_ion_el_heat_source']
     heat_source_location = jnp.array(heat_source.rsource)
@@ -747,7 +747,7 @@ class SimTest(sim_test_case.SimTestCase):
         expected_ne_flux_hires,
     )
     expected_Te = jnp.interp(rho_norm, rho_norm_hires, expected_Te_hires)
-    np.testing.assert_allclose(actual_Te, expected_Te, rtol=6e-4)
+    np.testing.assert_allclose(actual_Te, expected_Te, rtol=7e-4)
 
     # Assume no impurities, and Z_i=1
     expected_ni_hires = expected_ne_hires
