@@ -684,21 +684,21 @@ class SimTest(sim_test_case.SimTestCase):
     )
 
   def test_convection_equilibrium(self):
-    sim = self._get_sim('test_convection_equilibrium.py')
-    sim_outputs = sim.run()
-    history = output.StateHistory(sim_outputs, sim.source_models)
-    actual_ne = history.core_profiles.ne.value[-1]
-    actual_Te = history.core_profiles.temp_el.value[-1]
-    actual_Ti = history.core_profiles.temp_ion.value[-1]
+    torax_config = self._get_torax_config('test_convection_equilibrium.py')
+    state_history = run_simulation.run_simulation(torax_config)
+    actual_ne = state_history.core_profiles.ne.value[-1]
+    actual_Te = state_history.core_profiles.temp_el.value[-1]
+    actual_Ti = state_history.core_profiles.temp_ion.value[-1]
 
-    geo = sim.geometry_provider(0.0)
-    dynamic_params = sim.dynamic_runtime_params_slice_provider(0.0)
+    geo = torax_config.geometry.build_provider(0.0)
+    dynamic_params = torax_config.runtime_params.build_dynamic_params(0.0)
+    transport_params = torax_config.transport.build_dynamic_params(0.0)
     self.assertTrue(dynamic_params.profile_conditions.ne_bound_right_is_absolute)
 
-    diffusion_coeff = jnp.array(dynamic_params.transport.De_const)
-    convection_coeff = jnp.array(dynamic_params.transport.Ve_const)
-    chi_e = jnp.array(dynamic_params.transport.chie_const)
-    chi_i = jnp.array(dynamic_params.transport.chii_const)
+    diffusion_coeff = jnp.array(transport_params.De_const)
+    convection_coeff = jnp.array(transport_params.Ve_const)
+    chi_e = jnp.array(transport_params.chie_const)
+    chi_i = jnp.array(transport_params.chii_const)
     nref = jnp.array(dynamic_params.numerics.nref)
 
     rho_norm = jnp.array(geo.rho_norm)
@@ -710,7 +710,7 @@ class SimTest(sim_test_case.SimTestCase):
 
     rho_norm_hires = jnp.linspace(0, 1, 200)
 
-    ne_source = dynamic_params.sources['generic_particle_source']
+    ne_source = torax_config.sources.generic_particle_source.build_dynamic_params(0.0)
     expected_ne_hires, expected_ne_flux_hires = n_equilibrium_solution(
         rho_norm_hires,
         diffusion_coeff,
@@ -727,7 +727,7 @@ class SimTest(sim_test_case.SimTestCase):
     expected_ne = jnp.interp(rho_norm, rho_norm_hires, expected_ne_hires)
     np.testing.assert_allclose(actual_ne, expected_ne, rtol=3e-4)
 
-    heat_source = dynamic_params.sources['generic_ion_el_heat_source']
+    heat_source = torax_config.sources.generic_ion_el_heat_source.build_dynamic_params(0.0)
     heat_source_location = jnp.array(heat_source.rsource)
     heat_source_width = jnp.array(heat_source.w)
     heat_source_magnitude = jnp.array(heat_source.Ptot / (nref * constants.CONSTANTS.keV2J))
