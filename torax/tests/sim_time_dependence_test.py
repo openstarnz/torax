@@ -24,7 +24,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pydantic
-from torax import output
 from torax import sim
 from torax import state
 from torax.config import build_runtime_params
@@ -46,7 +45,7 @@ from torax.transport_model import transport_model as transport_model_lib
 from typing_extensions import Annotated
 
 
-class SimWithTimeDependeceTest(parameterized.TestCase):
+class SimWithTimeDependenceTest(parameterized.TestCase):
   """Integration tests for torax.sim with time-dependent runtime params."""
 
   def setUp(self):
@@ -112,10 +111,11 @@ class SimWithTimeDependeceTest(parameterized.TestCase):
         geometry_provider: geometry_provider_lib.GeometryProvider,
         initial_state: state.ToraxSimState,
         step_fn: step_function.SimulationStepFn,
+        restart_case: bool,
         log_timestep_info: bool = False,
         progress_bar: bool = True,
-    ) -> output.ToraxSimOutputs:
-      del log_timestep_info, progress_bar
+    ) -> tuple[tuple[state.ToraxSimState, ...], state.SimError]:
+      del log_timestep_info, progress_bar, restart_case
       output_state, error = step_fn(
           static_runtime_params_slice,
           dynamic_runtime_params_slice_provider,
@@ -137,9 +137,7 @@ class SimWithTimeDependeceTest(parameterized.TestCase):
       np.testing.assert_allclose(
           output_state.core_sources.qei.qei_coef, expected_combined_value
       )
-      return output.ToraxSimOutputs(
-          sim_history=(output_state,), sim_error=error
-      )
+      return (output_state,), error
 
     with mock.patch.object(
         sim, '_run_simulation', wraps=_fake_sim_run_simulation
@@ -291,6 +289,12 @@ class FakeTransportModel(transport_model_lib.TransportModel):
       pedestal_model_output: pedestal_model_lib.PedestalModelOutput,
   ) -> state.CoreTransport:
     return state.CoreTransport.zeros(geo)
+
+  def __hash__(self) -> int:
+    return hash(self.__class__.__name__)
+
+  def __eq__(self, other) -> bool:
+    return isinstance(other, type(self))
 
 
 class FakeTransportConfig(transport_pydantic_model_base.TransportBase):
