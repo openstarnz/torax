@@ -15,15 +15,58 @@
 import dataclasses
 
 from absl import logging
-
+import jax.numpy as jnp
 from torax import output
-from torax import sim
 from torax import state
 from torax.config import config_args
 from torax.config import runtime_params_slice
+from torax.core_profiles import initialization
 from torax.geometry import geometry
 from torax.orchestration import step_function
+from torax.sources import source_profile_builders
 from torax.torax_pydantic import file_restart as file_restart_pydantic_model
+import xarray as xr
+
+
+def get_initial_state(
+    static_runtime_params_slice: runtime_params_slice.StaticRuntimeParamsSlice,
+    dynamic_runtime_params_slice: runtime_params_slice.DynamicRuntimeParamsSlice,
+    geo: geometry.Geometry,
+    step_fn: step_function.SimulationStepFn,
+) -> state.ToraxSimState:
+  """Returns the initial state to be used by run_simulation()."""
+  initial_core_profiles = initialization.initial_core_profiles(
+      static_runtime_params_slice,
+      dynamic_runtime_params_slice,
+      geo,
+      step_fn.stepper.source_models,
+  )
+  # Populate the starting state with source profiles from the implicit sources
+  # before starting the run-loop. The explicit source profiles will be computed
+  # inside the loop and will be merged with these implicit source profiles.
+  initial_core_sources = source_profile_builders.get_initial_source_profiles(
+      static_runtime_params_slice=static_runtime_params_slice,
+      dynamic_runtime_params_slice=dynamic_runtime_params_slice,
+      geo=geo,
+      core_profiles=initial_core_profiles,
+      source_models=step_fn.stepper.source_models,
+  )
+
+  return state.ToraxSimState(
+      t=jnp.array(dynamic_runtime_params_slice.numerics.t_initial),
+      dt=jnp.zeros(()),
+      core_profiles=initial_core_profiles,
+      # This will be overridden within run_simulation().
+      core_sources=initial_core_sources,
+      core_transport=state.CoreTransport.zeros(geo),
+      post_processed_outputs=state.PostProcessedOutputs.zeros(geo),
+      stepper_numeric_outputs=state.StepperNumericOutputs(
+          stepper_error_state=0,
+          outer_stepper_iterations=0,
+          inner_solver_iterations=0,
+      ),
+      geometry=geo,
+  )
 
 
 def initial_state_from_file_restart(
@@ -55,7 +98,7 @@ def initial_state_from_file_restart(
     )
   # Override some of dynamic runtime params slice from t=t_initial.
   dynamic_runtime_params_slice_for_init, geo_for_init = (
-      sim._override_initial_runtime_params_from_file(  # pylint: disable=protected-access
+      _override_initial_runtime_params_from_file(
           dynamic_runtime_params_slice_for_init,
           geo_for_init,
           t_restart,
@@ -70,19 +113,94 @@ def initial_state_from_file_restart(
   )
   post_processed_dataset = post_processed_dataset.squeeze()
   post_processed_outputs = (
-      sim._override_initial_state_post_processed_outputs_from_file(  # pylint: disable=protected-access
+      _override_initial_state_post_processed_outputs_from_file(
           geo_for_init,
           post_processed_dataset,
       )
   )
 
-  initial_state = sim.get_initial_state(
+  initial_state = get_initial_state(
       static_runtime_params_slice=static_runtime_params_slice,
       dynamic_runtime_params_slice=dynamic_runtime_params_slice_for_init,
       geo=geo_for_init,
       step_fn=step_fn,
   )
+  # In restarts we always know the initial vloop_lcfs so replace the
+  # zeros initialization (for Ip BC case) from get_initial_state.
+  core_profiles = dataclasses.replace(
+      initial_state.core_profiles,
+      vloop_lcfs=core_profiles_dataset.vloop_lcfs.values,
+  )
   return dataclasses.replace(
       initial_state,
       post_processed_outputs=post_processed_outputs,
+      core_profiles=core_profiles,
   )
+
+
+def _override_initial_runtime_params_from_file(
+    dynamic_runtime_params_slice: runtime_params_slice.DynamicRuntimeParamsSlice,
+    geo: geometry.Geometry,
+    t_restart: float,
+    ds: xr.Dataset,
+) -> tuple[
+    runtime_params_slice.DynamicRuntimeParamsSlice,
+    geometry.Geometry,
+]:
+  """Override parts of runtime params slice from state in a file."""
+  # pylint: disable=invalid-name
+  dynamic_runtime_params_slice.numerics.t_initial = t_restart
+  dynamic_runtime_params_slice.profile_conditions.Ip_tot = ds.data_vars[
+      output.IP_PROFILE_FACE
+  ].to_numpy()[-1]/1e6  # Convert from A to MA.
+  dynamic_runtime_params_slice.profile_conditions.Te = ds.data_vars[
+      output.TEMP_EL
+  ].to_numpy()
+  dynamic_runtime_params_slice.profile_conditions.Te_bound_right = ds.data_vars[
+      output.TEMP_EL_RIGHT_BC
+  ].to_numpy()
+  dynamic_runtime_params_slice.profile_conditions.Ti = ds.data_vars[
+      output.TEMP_ION
+  ].to_numpy()
+  dynamic_runtime_params_slice.profile_conditions.Ti_bound_right = ds.data_vars[
+      output.TEMP_ION_RIGHT_BC
+  ].to_numpy()
+  dynamic_runtime_params_slice.profile_conditions.ne = ds.data_vars[
+      output.NE
+  ].to_numpy()
+  dynamic_runtime_params_slice.profile_conditions.ne_bound_right = ds.data_vars[
+      output.NE_RIGHT_BC
+  ].to_numpy()
+  dynamic_runtime_params_slice.profile_conditions.psi = ds.data_vars[
+      output.PSI
+  ].to_numpy()
+  # When loading from file we want ne not to have transformations.
+  # Both ne and the boundary condition are given in absolute values (not fGW).
+  dynamic_runtime_params_slice.profile_conditions.ne_bound_right_is_fGW = False
+  dynamic_runtime_params_slice.profile_conditions.ne_is_fGW = False
+  dynamic_runtime_params_slice.profile_conditions.ne_bound_right_is_absolute = (
+      True
+  )
+  # Additionally we want to avoid normalizing to nbar.
+  dynamic_runtime_params_slice.profile_conditions.normalize_to_nbar = False
+  # pylint: enable=invalid-name
+
+  dynamic_runtime_params_slice, geo = runtime_params_slice.make_ip_consistent(
+      dynamic_runtime_params_slice, geo
+  )
+
+  return dynamic_runtime_params_slice, geo
+
+
+def _override_initial_state_post_processed_outputs_from_file(
+    geo: geometry.Geometry,
+    ds: xr.Dataset,
+) -> state.PostProcessedOutputs:
+  """Override parts of initial state post processed outputs from file."""
+  post_processed_outputs = state.PostProcessedOutputs.zeros(geo)
+  post_processed_outputs = dataclasses.replace(
+      post_processed_outputs,
+      E_cumulative_fusion=ds.data_vars['E_cumulative_fusion'].to_numpy(),
+      E_cumulative_external=ds.data_vars['E_cumulative_external'].to_numpy(),
+  )
+  return post_processed_outputs

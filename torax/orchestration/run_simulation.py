@@ -55,11 +55,14 @@ def run_simulation(
       pedestal_model=pedestal_model,
   )
 
+  mhd_models = torax_config.mhd.build_mhd_models()
+
   step_fn = step_function.SimulationStepFn(
       stepper=stepper,
       time_step_calculator=torax_config.time_step_calculator.time_step_calculator,
       transport_model=transport_model,
       pedestal_model=pedestal_model,
+      mhd_models=mhd_models,
   )
 
   static_runtime_params_slice = (
@@ -78,6 +81,7 @@ def run_simulation(
           transport=torax_config.transport,
           sources=torax_config.sources,
           stepper=torax_config.stepper,
+          mhd=torax_config.mhd,
           torax_mesh=torax_config.geometry.build_provider.torax_mesh,
       )
   )
@@ -98,23 +102,29 @@ def run_simulation(
         geo_for_init=geo_for_init,
         step_fn=step_fn,
     )
+    restart_case = True
   else:
-    initial_state = sim.get_initial_state(
+    initial_state = initial_state_lib.get_initial_state(
         static_runtime_params_slice=static_runtime_params_slice,
         dynamic_runtime_params_slice=dynamic_runtime_params_slice_for_init,
         geo=geo_for_init,
         step_fn=step_fn,
     )
+    restart_case = False
 
-  sim_outputs = sim._run_simulation(  # pylint: disable=protected-access
+  state_history, sim_error = sim._run_simulation(  # pylint: disable=protected-access
       static_runtime_params_slice=static_runtime_params_slice,
       dynamic_runtime_params_slice_provider=dynamic_runtime_params_slice_provider,
       geometry_provider=geometry_provider,
       initial_state=initial_state,
+      restart_case=restart_case,
       step_fn=step_fn,
       log_timestep_info=log_timestep_info,
       progress_bar=progress_bar,
   )
 
   return output.StateHistory(
-      sim_outputs=sim_outputs, source_models=source_models)
+      state_history=state_history,
+      sim_error=sim_error,
+      source_models=source_models,
+  )
