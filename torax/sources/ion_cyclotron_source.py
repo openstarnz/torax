@@ -26,6 +26,7 @@ from jax import numpy as jnp
 import jaxtyping as jt
 import numpy as np
 from torax import array_typing
+from torax import jax_utils
 from torax import math_utils
 from torax import state
 from torax.config import runtime_params_slice
@@ -38,6 +39,12 @@ from torax.sources import source_profiles
 from torax.torax_pydantic import torax_pydantic
 
 # Internal import.
+
+
+# Default value for the model function to be used for the ion cyclotron
+# source. This is also used as an identifier for the model function in
+# the default source config for Pydantic to "discriminate" against.
+DEFAULT_MODEL_FUNCTION_NAME: str = 'icrh_model_func'
 
 
 # Environment variable for the TORIC NN model. Used if the model path
@@ -266,7 +273,7 @@ class ToricNNWrapper:
         inputs.temperature_peaking_factor,
         inputs.density_peaking_factor,
         inputs.B0,
-    ])
+    ], dtype=jax_utils.get_dtype())
     outputs_He3 = self._power_deposition_network.apply(
         self._power_deposition_He3_params, inputs
     )
@@ -428,7 +435,6 @@ class IonCyclotronSource(source.Source):
   """Ion cyclotron source with surrogate model."""
 
   SOURCE_NAME: ClassVar[str] = 'ion_cyclotron_source'
-  DEFAULT_MODEL_FUNCTION_NAME: ClassVar[str] = 'icrh_model_func'
 
   @property
   def source_name(self) -> str:
@@ -456,8 +462,7 @@ class IonCyclotronSourceConfig(base.SourceModelBase):
     Ptot: Total heating power [W].
     absorption_fraction: Fraction of absorbed power.
   """
-
-  source_name: Literal['ion_cyclotron_source'] = 'ion_cyclotron_source'
+  model_function_name: Literal['icrh_model_func'] = 'icrh_model_func'
   wall_inner: torax_pydantic.Meter = 1.24
   wall_outer: torax_pydantic.Meter = 2.43
   frequency: torax_pydantic.TimeVaryingScalar = torax_pydantic.ValidatedDefault(
