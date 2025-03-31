@@ -12,19 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from absl.testing import absltest
-from torax.geometry import pydantic_model as geometry_pydantic_model
-from torax.transport_model import constant
+"""Identical to test_psichease_ip_chease_vloop but with varying vloop_lcfs."""
+
+import copy
+import numpy as np
+from torax.tests.test_data import test_psichease_ip_parameters
 
 
-class RuntimeParamsTest(absltest.TestCase):
+CONFIG = copy.deepcopy(test_psichease_ip_parameters.CONFIG)
+times = np.linspace(0, 3, 100)
+# 1 Hz frequency
+vloop = 8.7 + 10 * np.sin(2 * np.pi * times)
 
-  def test_runtime_params_builds_dynamic_params(self):
-    runtime_params = constant.RuntimeParams()
-    geo = geometry_pydantic_model.CircularConfig().build_geometry()
-    provider = runtime_params.make_provider(geo.torax_mesh)
-    provider.build_dynamic_params(t=0.0)
-
-
-if __name__ == '__main__':
-  absltest.main()
+CONFIG['runtime_params']['profile_conditions'][
+    'use_vloop_lcfs_boundary_condition'
+] = True
+CONFIG['runtime_params']['profile_conditions']['vloop_lcfs'] = (times, vloop)

@@ -12,14 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Identical to test_psichease_ip_chease but V-loop boundary condition."""
-
-import copy
-from torax.tests.test_data import test_psichease_ip_parameters
-
-
-CONFIG = copy.deepcopy(test_psichease_ip_parameters.CONFIG)
-CONFIG['runtime_params']['profile_conditions'][
-    'use_vloop_lcfs_boundary_condition'
-] = True
-CONFIG['runtime_params']['profile_conditions']['vloop_lcfs'] = 8.7
+"""Transport model tests."""

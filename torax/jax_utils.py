@@ -16,17 +16,48 @@
 
 import contextlib
 import dataclasses
+import functools
 import os
 from typing import Any, Callable, Optional, TypeVar, Union
-
 import chex
 import equinox as eqx
 import jax
 from jax import numpy as jnp
+import numpy as np
 
 
 T = TypeVar('T')
 BooleanNumeric = Any  # A bool, or a Boolean array.
+
+
+@functools.cache
+def get_dtype() -> type(jnp.float32):
+  # Default TORAX JAX precision is f64
+  precision = os.getenv('JAX_PRECISION', 'f64')
+  assert precision == 'f64' or precision == 'f32', (
+      'Unknown JAX precision environment variable: %s' % precision
+  )
+  return jnp.float64 if precision == 'f64' else jnp.float32
+
+
+@functools.cache
+def get_np_dtype() -> type(np.float32):
+  # Default TORAX JAX precision is f64
+  precision = os.getenv('JAX_PRECISION', 'f64')
+  assert precision == 'f64' or precision == 'f32', (
+      'Unknown JAX precision environment variable: %s' % precision
+  )
+  return np.float64 if precision == 'f64' else np.float32
+
+
+@functools.cache
+def get_int_dtype() -> type(jnp.int32):
+  # Default TORAX JAX precision is f64
+  precision = os.getenv('JAX_PRECISION', 'f64')
+  assert precision == 'f64' or precision == 'f32', (
+      'Unknown JAX precision environment variable: %s' % precision
+  )
+  return jnp.int64 if precision == 'f64' else jnp.int32
 
 
 def env_bool(name: str, default: bool) -> bool:
@@ -54,12 +85,6 @@ def env_bool(name: str, default: bool) -> bool:
 # Default to False, because host_callbacks are incompatible with the
 # persistent compilation cache.
 _ERRORS_ENABLED: bool = env_bool('TORAX_ERRORS_ENABLED', False)
-
-# If True, jax_utils.jit is jax.jit and causes compilation.
-# Otherwise, jax_utils.jit is a no-op for debugging purposes.
-# This setting cannot be changed because it determines the behavior
-# of most torax modules at import time.
-_COMPILATION_ENABLED: bool = env_bool('TORAX_COMPILATION_ENABLED', True)
 
 
 @contextlib.contextmanager
@@ -102,8 +127,6 @@ def error_if(
   Returns:
     var: Identity wrapper that must be used for the check to be included.
   """
-  var = jnp.array(var)
-  cond = jnp.array(cond)
   if not _ERRORS_ENABLED:
     return var
   return eqx.error_if(var, cond, msg)
@@ -147,7 +170,7 @@ def jax_default(value: chex.Numeric) -> ...:
 
 def compat_linspace(
     start: Union[chex.Numeric, jax.Array], stop: jax.Array, num: jax.Array
-)-> jax.Array:
+) -> jax.Array:
   """See np.linspace.
 
   This implementation of a subset of the linspace API reproduces the
@@ -205,8 +228,8 @@ def is_tracer(var: jax.Array) -> bool:
 
 
 def jit(*args, **kwargs) -> Callable[..., Any]:
-  """Calls jax.jit iff TORAX_COMPILATION_ENABLED is True."""
-  if _COMPILATION_ENABLED:
+  """Calls jax.jit if TORAX_COMPILATION_ENABLED is True, otherwise no-op."""
+  if env_bool('TORAX_COMPILATION_ENABLED', True):
     return jax.jit(*args, **kwargs)
   return args[0]
 

@@ -11,20 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for runtime params for transport model."""
-from absl.testing import absltest
-from torax.geometry import pydantic_model as geometry_pydantic_model
-from torax.transport_model import runtime_params as runtime_params_lib
+
+"""Container for MHD model dynamic runtime params."""
+
+import chex
+from torax.mhd.sawtooth import runtime_params as sawtooth_runtime_params
 
 
-class RuntimeParamsTest(absltest.TestCase):
+@chex.dataclass(frozen=True)
+class DynamicMHDParams:
+  """Container for dynamic parameters of all configured MHD models."""
 
-  def test_runtime_params_builds_dynamic_params(self):
-    runtime_params = runtime_params_lib.RuntimeParams()
-    geo = geometry_pydantic_model.CircularConfig().build_geometry()
-    provider = runtime_params.make_provider(geo.torax_mesh)
-    provider.build_dynamic_params(t=0.0)
-
-
-if __name__ == '__main__':
-  absltest.main()
+  sawtooth: sawtooth_runtime_params.DynamicRuntimeParams | None = None
