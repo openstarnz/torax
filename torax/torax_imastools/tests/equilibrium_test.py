@@ -26,8 +26,8 @@ from jax import numpy as jnp
 import numpy as np
 import pytest
 try:
-    import imaspy
-    from imaspy.ids_toplevel import IDSToplevel
+    import imas
+    from imas.ids_toplevel import IDSToplevel
 except ImportError:
     IDSToplevel = Any
 from torax.tests.test_lib import sim_test_case
@@ -39,7 +39,7 @@ from torax.torax_imastools.equilibrium import geometry_to_IMAS
 from torax.torax_imastools.util import load_IMAS_data
 
 @pytest.mark.skipif(
-      importlib.util.find_spec('imaspy') is None,
+      importlib.util.find_spec('imas') is None,
       reason='IMASPy optional dependency'
     )
 class EquilibriumTest(sim_test_case.SimTestCase):
@@ -49,7 +49,7 @@ class EquilibriumTest(sim_test_case.SimTestCase):
   ])
   def test_save_geometry_to_IMAS(self, config_name, rtol: Optional[float] = None, atol: Optional[float] = None,):
     """Test that the default IMAS geometry can be built and converted back to IDS."""
-    if importlib.util.find_spec('imaspy') is None:
+    if importlib.util.find_spec('imas') is None:
       self.skipTest('IMASPy optional dependency')
 
     if rtol is None:
