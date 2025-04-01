@@ -903,7 +903,7 @@ class StandardGeometryIntermediates:
       Ip_from_parameters: bool,
       n_rho: int,
       hires_fac: int,
-  ) -> StandardGeometryIntermediates:
+  ) -> typing_extensions.Self:
     """Constructs a StandardGeometryIntermediates from a IMAS equilibrium IDS.
 
     Args:
