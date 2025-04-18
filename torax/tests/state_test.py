@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import dataclasses
-import functools
 from typing import Callable
 
 from absl.testing import absltest
@@ -24,11 +23,11 @@ import numpy as np
 from torax import math_utils
 from torax import state
 from torax.config import build_runtime_params
-from torax.config import config_args
 from torax.config import profile_conditions as profile_conditions_lib
 from torax.config import runtime_params as general_runtime_params
 from torax.core_profiles import initialization
 from torax.fvm import cell_variable
+from torax.geometry import geometry
 from torax.geometry import geometry_provider
 from torax.geometry import pydantic_model as geometry_pydantic_model
 from torax.sources import generic_current_source
@@ -39,66 +38,39 @@ from torax.sources import source_profiles as source_profiles_lib
 from torax.tests.test_lib import torax_refs
 
 
+def make_zero_core_profiles(
+    geo: geometry.Geometry,
+) -> state.CoreProfiles:
+  """Returns a dummy CoreProfiles object."""
+  zero_cell_variable = cell_variable.CellVariable(
+      value=jnp.zeros_like(geo.rho),
+      dr=geo.drho_norm,
+      right_face_constraint=jnp.ones(()),
+      right_face_grad_constraint=None,
+  )
+  return state.CoreProfiles(
+      currents=state.Currents.zeros(geo),
+      temp_ion=zero_cell_variable,
+      temp_el=zero_cell_variable,
+      psi=zero_cell_variable,
+      psidot=zero_cell_variable,
+      ne=zero_cell_variable,
+      ni=zero_cell_variable,
+      nimp=zero_cell_variable,
+      q_face=jnp.zeros_like(geo.rho_face),
+      s_face=jnp.zeros_like(geo.rho_face),
+      nref=jnp.array(0.0),
+      vloop_lcfs=jnp.array(0.0),
+      Zi=jnp.zeros_like(geo.rho),
+      Zi_face=jnp.zeros_like(geo.rho_face),
+      Ai=jnp.zeros(()),
+      Zimp=jnp.zeros_like(geo.rho),
+      Zimp_face=jnp.zeros_like(geo.rho_face),
+      Aimp=jnp.zeros(()),
+  )
+
+
 class StateTest(torax_refs.ReferenceValueTest):
-
-  def setUp(self):
-    super().setUp()
-
-    # Make a State object in history mode, output by scan
-    self.history_length = 2
-    self.sources = sources_pydantic_model.Sources()
-    source_models = source_models_lib.SourceModels(
-        sources=self.sources.source_model_config
-    )
-
-    def make_hist(geo, dynamic_runtime_params_slice, static_slice):
-      initial_counter = jnp.array(0)
-
-      def scan_f(counter: jax.Array, _) -> tuple[jax.Array, state.CoreProfiles]:
-        core_profiles = initialization.initial_core_profiles(
-            dynamic_runtime_params_slice=dynamic_runtime_params_slice,
-            static_runtime_params_slice=static_slice,
-            geo=geo,
-            source_models=source_models,
-        )
-        # Make one variable in the history track the value of the counter
-        value = jnp.ones_like(core_profiles.temp_ion.value) * counter
-        core_profiles = config_args.recursive_replace(
-            core_profiles, temp_ion={'value': value}
-        )
-        return counter + 1, core_profiles.history_elem()
-
-      _, history = jax.lax.scan(
-          scan_f,
-          initial_counter,
-          xs=None,
-          length=self.history_length,
-      )
-      return history
-
-    def make_history(runtime_params, geo_provider):
-      dynamic_runtime_params_slice, geo = (
-          torax_refs.build_consistent_dynamic_runtime_params_slice_and_geometry(
-              runtime_params,
-              geo_provider,
-              sources=self.sources,
-          )
-      )
-      static_slice = build_runtime_params.build_static_runtime_params_slice(
-          runtime_params=runtime_params,
-          sources=self.sources,
-          torax_mesh=geo.torax_mesh,
-      )
-      # Bind non-JAX arguments so it can be jitted
-      bound = functools.partial(
-          make_hist,
-          geo,
-          dynamic_runtime_params_slice,
-          static_slice,
-      )
-      return jax.jit(bound)()
-
-    self._make_history = make_history
 
   @parameterized.parameters([
       dict(references_getter=torax_refs.circular_references),
@@ -125,7 +97,9 @@ class StateTest(torax_refs.ReferenceValueTest):
         )
     )
     static_slice = build_runtime_params.build_static_runtime_params_slice(
-        runtime_params=references.runtime_params,
+        profile_conditions=references.profile_conditions,
+        numerics=references.numerics,
+        plasma_composition=references.plasma_composition,
         sources=sources,
         torax_mesh=geo.torax_mesh,
     )
@@ -136,26 +110,6 @@ class StateTest(torax_refs.ReferenceValueTest):
         source_models=source_models,
     )
     basic_core_profiles.sanity_check()
-
-  @parameterized.parameters([
-      dict(references_getter=torax_refs.circular_references),
-      dict(references_getter=torax_refs.chease_references_Ip_from_chease),
-      dict(
-          references_getter=torax_refs.chease_references_Ip_from_runtime_params
-      ),
-  ])
-  def test_index(
-      self,
-      references_getter: Callable[[], torax_refs.References],
-  ):
-    """Test State.index."""
-    references = references_getter()
-    history = self._make_history(
-        references.runtime_params, references.geometry_provider
-    )
-
-    for i in range(self.history_length):
-      self.assertEqual(i, history.index(i).temp_ion.value[0])
 
   def test_nan_check(self,):
     t = jnp.array(0.0)
@@ -173,33 +127,13 @@ class StateTest(torax_refs.ReferenceValueTest):
         right_face_constraint=jnp.ones(()),
         right_face_grad_constraint=None,
     )
-    core_profiles = state.CoreProfiles(
-        currents=state.Currents.zeros(geo),
-        temp_ion=dummy_cell_variable,
-        temp_el=dummy_cell_variable,
-        psi=dummy_cell_variable,
-        psidot=dummy_cell_variable,
-        ne=dummy_cell_variable,
-        ni=dummy_cell_variable,
-        nimp=dummy_cell_variable,
-        q_face=jnp.zeros_like(geo.rho_face),
-        s_face=jnp.zeros_like(geo.rho_face),
-        nref=jnp.array(0.0),
-        vloop_lcfs=jnp.array(0.0),
-        Zi=jnp.zeros_like(geo.rho),
-        Zi_face=jnp.zeros_like(geo.rho_face),
-        Ai=jnp.zeros(()),
-        Zimp=jnp.zeros_like(geo.rho),
-        Zimp_face=jnp.zeros_like(geo.rho_face),
-        Aimp=jnp.zeros(()),
-    )
+    core_profiles = make_zero_core_profiles(geo)
     sim_state = state.ToraxSimState(
         core_profiles=core_profiles,
         core_transport=state.CoreTransport.zeros(geo),
         core_sources=source_profiles,
         t=t,
         dt=dt,
-        post_processed_outputs=state.PostProcessedOutputs.zeros(geo),
         stepper_numeric_outputs=state.StepperNumericOutputs(
             outer_stepper_iterations=1,
             stepper_error_state=1,
@@ -207,9 +141,12 @@ class StateTest(torax_refs.ReferenceValueTest):
         ),
         geometry=geo,
     )
+    post_processed_outputs = state.PostProcessedOutputs.zeros(geo)
 
     with self.subTest('no NaN'):
       error = sim_state.check_for_errors()
+      self.assertEqual(error, state.SimError.NO_ERROR)
+      error = state.check_for_errors(sim_state, post_processed_outputs)
       self.assertEqual(error, state.SimError.NO_ERROR)
 
     with self.subTest('NaN in BC'):
@@ -225,16 +162,18 @@ class StateTest(torax_refs.ReferenceValueTest):
       )
       error = new_sim_state_core_profiles.check_for_errors()
       self.assertEqual(error, state.SimError.NAN_DETECTED)
+      error = state.check_for_errors(
+          new_sim_state_core_profiles, post_processed_outputs)
+      self.assertEqual(error, state.SimError.NAN_DETECTED)
 
     with self.subTest('NaN in post processed outputs'):
-      postprocessed_outputs = dataclasses.replace(
-          sim_state.post_processed_outputs,
+      new_post_processed_outputs = dataclasses.replace(
+          post_processed_outputs,
           P_external_tot=jnp.array(jnp.nan),
       )
-      new_sim_state_post = dataclasses.replace(
-          sim_state, post_processed_outputs=postprocessed_outputs
-      )
-      error = new_sim_state_post.check_for_errors()
+      error = new_post_processed_outputs.check_for_errors()
+      self.assertEqual(error, state.SimError.NAN_DETECTED)
+      error = state.check_for_errors(sim_state, new_post_processed_outputs)
       self.assertEqual(error, state.SimError.NAN_DETECTED)
 
     with self.subTest('NaN in one element of source array'):
@@ -251,6 +190,10 @@ class StateTest(torax_refs.ReferenceValueTest):
           sim_state, core_sources=new_core_sources
       )
       error = new_sim_state_sources.check_for_errors()
+      self.assertEqual(error, state.SimError.NAN_DETECTED)
+      error = state.check_for_errors(
+          new_sim_state_sources, post_processed_outputs
+      )
       self.assertEqual(error, state.SimError.NAN_DETECTED)
 
 
@@ -283,7 +226,9 @@ class InitialStatesTest(parameterized.TestCase):
         )
     )
     static_slice = build_runtime_params.build_static_runtime_params_slice(
-        runtime_params=runtime_params,
+        profile_conditions=runtime_params.profile_conditions,
+        numerics=runtime_params.numerics,
+        plasma_composition=runtime_params.plasma_composition,
         sources=sources,
         torax_mesh=geo.torax_mesh,
     )
@@ -319,7 +264,9 @@ class InitialStatesTest(parameterized.TestCase):
         )
     )
     static_slice = build_runtime_params.build_static_runtime_params_slice(
-        runtime_params=runtime_params,
+        profile_conditions=runtime_params.profile_conditions,
+        numerics=runtime_params.numerics,
+        plasma_composition=runtime_params.plasma_composition,
         sources=sources,
         torax_mesh=geo.torax_mesh,
     )
@@ -398,7 +345,9 @@ class InitialStatesTest(parameterized.TestCase):
         )
     )
     static_slice = build_runtime_params.build_static_runtime_params_slice(
-        runtime_params=config1,
+        profile_conditions=config1.profile_conditions,
+        numerics=config1.numerics,
+        plasma_composition=config1.plasma_composition,
         sources=sources,
         torax_mesh=geo.torax_mesh,
     )
@@ -416,7 +365,9 @@ class InitialStatesTest(parameterized.TestCase):
         )
     )
     static_slice = build_runtime_params.build_static_runtime_params_slice(
-        runtime_params=config2,
+        profile_conditions=config2.profile_conditions,
+        numerics=config2.numerics,
+        plasma_composition=config2.plasma_composition,
         sources=sources,
         torax_mesh=geo.torax_mesh,
     )
@@ -447,7 +398,9 @@ class InitialStatesTest(parameterized.TestCase):
         )
     )
     static_slice = build_runtime_params.build_static_runtime_params_slice(
-        runtime_params=config3,
+        profile_conditions=config3.profile_conditions,
+        numerics=config3.numerics,
+        plasma_composition=config3.plasma_composition,
         sources=sources,
         torax_mesh=geo.torax_mesh,
     )
@@ -476,7 +429,9 @@ class InitialStatesTest(parameterized.TestCase):
         )
     )
     static_slice = build_runtime_params.build_static_runtime_params_slice(
-        runtime_params=config3_helper,
+        profile_conditions=config3_helper.profile_conditions,
+        numerics=config3_helper.numerics,
+        plasma_composition=config3_helper.plasma_composition,
         sources=sources,
         torax_mesh=geo.torax_mesh,
     )
@@ -592,7 +547,9 @@ class InitialStatesTest(parameterized.TestCase):
         t=config2.numerics.t_initial,
     )
     static_slice = build_runtime_params.build_static_runtime_params_slice(
-        runtime_params=config1,
+        profile_conditions=config1.profile_conditions,
+        numerics=config1.numerics,
+        plasma_composition=config1.plasma_composition,
         sources=sources,
         torax_mesh=geo.torax_mesh,
     )
@@ -603,7 +560,9 @@ class InitialStatesTest(parameterized.TestCase):
         source_models=source_models,
     )
     static_slice = build_runtime_params.build_static_runtime_params_slice(
-        runtime_params=config2,
+        profile_conditions=config2.profile_conditions,
+        numerics=config2.numerics,
+        plasma_composition=config2.plasma_composition,
         sources=sources,
         torax_mesh=geo.torax_mesh,
     )
@@ -616,6 +575,30 @@ class InitialStatesTest(parameterized.TestCase):
     np.testing.assert_allclose(
         core_profiles1.currents.jtot, core_profiles2.currents.jtot
     )
+
+  def test_core_profiles_negative_values_check(self):
+    geo = geometry_pydantic_model.CircularConfig().build_geometry()
+    core_profiles = make_zero_core_profiles(geo)
+    with self.subTest('no negative values'):
+      self.assertFalse(core_profiles.negative_temperature_or_density())
+    with self.subTest('negative temp_ion triggers'):
+      new_core_profiles = dataclasses.replace(
+          core_profiles,
+          temp_ion=dataclasses.replace(
+              core_profiles.temp_ion,
+              value=jnp.array(-1.0),
+          ),
+      )
+      self.assertTrue(new_core_profiles.negative_temperature_or_density())
+    with self.subTest('negative psi does not trigger'):
+      new_core_profiles = dataclasses.replace(
+          core_profiles,
+          psi=dataclasses.replace(
+              core_profiles.psi,
+              value=jnp.array(-1.0),
+          ),
+      )
+      self.assertFalse(new_core_profiles.negative_temperature_or_density())
 
 
 if __name__ == '__main__':

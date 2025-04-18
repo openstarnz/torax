@@ -13,20 +13,42 @@
 # limitations under the License.
 
 """Pydantic config for Pedestal."""
-import copy
-from typing import Any, Literal
+import abc
+from typing import Literal
 import chex
-import pydantic
+from torax.pedestal_model import no_pedestal
 from torax.pedestal_model import pedestal_model
 from torax.pedestal_model import runtime_params
 from torax.pedestal_model import set_pped_tpedratio_nped
 from torax.pedestal_model import set_tped_nped
-from torax.torax_pydantic import interpolated_param_1d
 from torax.torax_pydantic import torax_pydantic
-
-
 # pylint: disable=invalid-name
-class SetPpedTpedRatioNped(torax_pydantic.BaseModelFrozen):
+
+
+class BasePedestal(torax_pydantic.BaseModelFrozen, abc.ABC):
+  """Base class for pedestal models.
+
+  Attributes:
+    set_pedestal: Whether to use the pedestal model and set the pedestal. Can be
+      time varying.
+  """
+
+  set_pedestal: torax_pydantic.TimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(False)
+  )
+
+  @abc.abstractmethod
+  def build_pedestal_model(self) -> pedestal_model.PedestalModel:
+    """Builds the pedestal model."""
+
+  @abc.abstractmethod
+  def build_dynamic_params(
+      self, t: chex.Numeric
+  ) -> runtime_params.DynamicRuntimeParams:
+    """Builds the dynamic params."""
+
+
+class SetPpedTpedRatioNped(BasePedestal):
   """Model for direct specification of pressure, temperature ratio, and density.
 
   Attributes:
@@ -38,18 +60,18 @@ class SetPpedTpedRatioNped(torax_pydantic.BaseModelFrozen):
       the pedestal [dimensionless].
     rho_norm_ped_top: The location of the pedestal top.
   """
-  pedestal_model: Literal['set_pped_tpedratio_nped']
-  Pped: interpolated_param_1d.TimeVaryingScalar = (
+  pedestal_model: Literal['set_pped_tpedratio_nped'] = 'set_pped_tpedratio_nped'
+  Pped: torax_pydantic.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(1e5)
   )
-  neped: interpolated_param_1d.TimeVaryingScalar = (
+  neped: torax_pydantic.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(0.7)
   )
   neped_is_fGW: bool = False
-  ion_electron_temperature_ratio: interpolated_param_1d.TimeVaryingScalar = (
+  ion_electron_temperature_ratio: torax_pydantic.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(1.0)
   )
-  rho_norm_ped_top: interpolated_param_1d.TimeVaryingScalar = (
+  rho_norm_ped_top: torax_pydantic.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(0.91)
   )
 
@@ -66,6 +88,7 @@ class SetPpedTpedRatioNped(torax_pydantic.BaseModelFrozen):
       self, t: chex.Numeric
   ) -> set_pped_tpedratio_nped.DynamicRuntimeParams:
     return set_pped_tpedratio_nped.DynamicRuntimeParams(
+        set_pedestal=self.set_pedestal.get_value(t),
         Pped=self.Pped.get_value(t),
         neped=self.neped.get_value(t),
         neped_is_fGW=self.neped_is_fGW,
@@ -76,7 +99,7 @@ class SetPpedTpedRatioNped(torax_pydantic.BaseModelFrozen):
     )
 
 
-class SetTpedNped(torax_pydantic.BaseModelFrozen):
+class SetTpedNped(BasePedestal):
   """A basic version of the pedestal model that uses direct specification.
 
   Attributes:
@@ -88,18 +111,18 @@ class SetTpedNped(torax_pydantic.BaseModelFrozen):
     rho_norm_ped_top: The location of the pedestal top.
   """
 
-  pedestal_model: Literal['set_tped_nped']
-  neped: interpolated_param_1d.TimeVaryingScalar = (
+  pedestal_model: Literal['set_tped_nped'] = 'set_tped_nped'
+  neped: torax_pydantic.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(0.7)
   )
   neped_is_fGW: bool = False
-  Tiped: interpolated_param_1d.TimeVaryingScalar = (
+  Tiped: torax_pydantic.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(5.0)
   )
-  Teped: interpolated_param_1d.TimeVaryingScalar = (
+  Teped: torax_pydantic.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(5.0)
   )
-  rho_norm_ped_top: interpolated_param_1d.TimeVaryingScalar = (
+  rho_norm_ped_top: torax_pydantic.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(0.91)
   )
 
@@ -112,6 +135,7 @@ class SetTpedNped(torax_pydantic.BaseModelFrozen):
       self, t: chex.Numeric
   ) -> set_tped_nped.DynamicRuntimeParams:
     return set_tped_nped.DynamicRuntimeParams(
+        set_pedestal=self.set_pedestal.get_value(t),
         neped=self.neped.get_value(t),
         neped_is_fGW=self.neped_is_fGW,
         Tiped=self.Tiped.get_value(t),
@@ -120,32 +144,29 @@ class SetTpedNped(torax_pydantic.BaseModelFrozen):
     )
 
 
-class Pedestal(torax_pydantic.BaseModelFrozen):
-  """Config for a pedestal model."""
-  pedestal_config: SetPpedTpedRatioNped | SetTpedNped = pydantic.Field(
-      discriminator='pedestal_model', default_factory=SetTpedNped,
-  )
+class NoPedestal(BasePedestal):
+  """A pedestal model for when there is no pedestal.
 
-  @pydantic.model_validator(mode='before')
-  @classmethod
-  def _conform_data(cls, data: dict[str, Any]) -> dict[str, Any]:
-    # If we are running with the standard class constructor we don't need to do
-    # any custom validation.
-    if 'pedestal_config' in data:
-      return data
+  This is needed as under jax compilation we have to have a valid value for
+  both branches of the jax.lax.cond. This provides that value whilst being very
+  explicit about the fact that there is no pedestal and simple so minimal
+  compilation time.
 
-    pedestal_config = copy.deepcopy(data)
-    if 'pedestal_model' not in data:
-      pedestal_config['pedestal_model'] = 'set_tped_nped'
-
-    return {'pedestal_config': pedestal_config}
+  Note that setting `set_pedestal` to True with a NoPedestal model is the
+  equivalent of setting it to False.
+  """
+  pedestal_model: Literal['no_pedestal'] = 'no_pedestal'
 
   def build_pedestal_model(
       self,
-  ) -> pedestal_model.PedestalModel:
-    return self.pedestal_config.build_pedestal_model()
+  ) -> no_pedestal.NoPedestal:
+    return no_pedestal.NoPedestal()
 
   def build_dynamic_params(
       self, t: chex.Numeric
   ) -> runtime_params.DynamicRuntimeParams:
-    return self.pedestal_config.build_dynamic_params(t)
+    return runtime_params.DynamicRuntimeParams(
+        set_pedestal=self.set_pedestal.get_value(t),
+    )
+
+PedestalConfig = SetPpedTpedRatioNped | SetTpedNped | NoPedestal

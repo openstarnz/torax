@@ -26,6 +26,7 @@ from torax.geometry import geometry as geometry_lib
 from torax.sources import source_models as source_models_lib
 from torax.sources import source_profiles
 from torax.torax_pydantic import file_restart as file_restart_pydantic_model
+from torax.torax_pydantic import model_config
 import xarray as xr
 
 import os
@@ -89,12 +90,19 @@ SIM_ERROR = "sim_error"
 # Sources.
 CORE_SOURCES = "core_sources"
 
+# Boolean array indicating whether the state corresponds to a
+# post-sawtooth-crash state.
+SAWTOOTH_CRASH = "sawtooth_crash"
+
+# ToraxConfig.
+CONFIG = "config"
+
 # Excluded coordinates from geometry since they are at the top DataTree level.
 # Exclude q_correction_factor as it is not an interesting quantity to save.
 # TODO(b/338033916): consolidate on either rho or rho_cell naming for cell grid
 EXCLUDED_GEOMETRY_NAMES = frozenset({
-    RHO_CELL,
     RHO_FACE,
+    RHO_CELL,
     RHO_CELL_NORM,
     RHO_FACE_NORM,
     "rho",
@@ -182,17 +190,14 @@ class StateHistory:
   def __init__(
       self,
       state_history: tuple[state.ToraxSimState, ...],
+      post_processed_outputs_history: tuple[state.PostProcessedOutputs, ...],
       sim_error: state.SimError,
       source_models: source_models_lib.SourceModels,
+      torax_config: model_config.ToraxConfig,
   ):
-    core_profiles = [
-        state.core_profiles.history_elem() for state in state_history
-    ]
+    core_profiles = [state.core_profiles for state in state_history]
     core_sources = [state.core_sources for state in state_history]
     transport = [state.core_transport for state in state_history]
-    post_processed_output = [
-        state.post_processed_outputs for state in state_history
-    ]
     geometries = [state.geometry for state in state_history]
     self.geometry = geometry_lib.stack_geometries(geometries)
     stack = lambda *ys: np.stack(ys)
@@ -206,17 +211,19 @@ class StateHistory:
         stack, *transport
     )
     self.post_processed_outputs: state.PostProcessedOutputs = (
-        jax.tree_util.tree_map(stack, *post_processed_output)
+        jax.tree_util.tree_map(stack, *post_processed_outputs_history)
     )
     self.times = np.array([state.t for state in state_history])
     # The rho grid does not change in time so we can just take the first one.
     self.rho_norm = state_history[0].geometry.rho_norm
     self.rho_face_norm = state_history[0].geometry.rho_face_norm
-    self.rho_face = state_history[0].geometry.rho_face
-    self.rho = state_history[0].geometry.rho
     chex.assert_rank(self.times, 1)
     self.sim_error = sim_error
     self.source_models = source_models
+    self.sawtooth_crash = np.array(
+        [state.sawtooth_crash for state in state_history]
+    )
+    self.torax_config = torax_config
 
   def _pack_into_data_array(
       self,
@@ -240,9 +247,9 @@ class StateHistory:
 
     match data:
       case data if is_face_var(data):
-        dims = [TIME, RHO_FACE]
+        dims = [TIME, RHO_FACE_NORM]
       case data if is_cell_var(data):
-        dims = [TIME, RHO_CELL]
+        dims = [TIME, RHO_CELL_NORM]
       case data if is_scalar(data):
         dims = [TIME]
       case data if is_constant(data):
@@ -440,7 +447,10 @@ class StateHistory:
         - rho_cell_norm: The normalized toroidal coordinate on the cell grid.
         - rho_face: The toroidal coordinate on the face grid.
         - rho_cell: The toroidal coordinate on the cell grid.
+        - sawtooth_crash: Time-series boolean indicating whether the
+            state corresponds to a post-sawtooth-crash state.
         - sim_error: The simulation error state.
+        - config: The ToraxConfig used to run the simulation serialized to JSON.
       The child datasets contain the following variables:
         - core_profiles: Contains data variables for quantities in the
           CoreProfiles.
@@ -458,20 +468,16 @@ class StateHistory:
     # Get coordinate variables for dimensions ("time", "rho_face", "rho_cell")
     time = xr.DataArray(self.times, dims=[TIME], name=TIME)
     rho_face_norm = xr.DataArray(
-        self.rho_face_norm, dims=[RHO_FACE], name=RHO_FACE_NORM
+        self.rho_face_norm, dims=[RHO_FACE_NORM], name=RHO_FACE_NORM
     )
     rho_cell_norm = xr.DataArray(
-        self.rho_norm, dims=[RHO_CELL], name=RHO_CELL_NORM
+        self.rho_norm, dims=[RHO_CELL_NORM], name=RHO_CELL_NORM
     )
-    rho_face = xr.DataArray(self.rho_face, dims=[RHO_FACE], name=RHO_FACE)
-    rho_cell = xr.DataArray(self.rho, dims=[RHO_CELL], name=RHO_CELL)
 
     coords = {
         TIME: time,
         RHO_FACE_NORM: rho_face_norm,
         RHO_CELL_NORM: rho_cell_norm,
-        RHO_FACE: rho_face,
-        RHO_CELL: rho_cell,
     }
 
     # Update dict with flattened StateHistory dataclass containers
@@ -485,7 +491,12 @@ class StateHistory:
         self._save_post_processed_outputs(), coords=coords
     )
     geometry_ds = xr.Dataset(self._save_geometry(), coords=coords)
-    top_level_xr_dict = {SIM_ERROR: self.sim_error.value}
+    top_level_xr_dict = {
+        SIM_ERROR: self.sim_error.value,
+        SAWTOOTH_CRASH: xr.DataArray(
+            self.sawtooth_crash, dims=[TIME], name=SAWTOOTH_CRASH
+        ),
+    }
     data_tree = xr.DataTree(
         children={
             CORE_PROFILES: xr.DataTree(dataset=core_profiles_ds),
@@ -496,7 +507,11 @@ class StateHistory:
             ),
             GEOMETRY: xr.DataTree(dataset=geometry_ds),
         },
-        dataset=xr.Dataset(top_level_xr_dict, coords=coords),
+        dataset=xr.Dataset(
+            top_level_xr_dict,
+            coords=coords,
+            attrs={CONFIG: self.torax_config.model_dump_json()},
+        ),
     )
 
     if file_restart is not None and file_restart.stitch:

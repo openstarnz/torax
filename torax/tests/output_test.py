@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import dataclasses
+import json
 import os
 
 from absl.testing import absltest
@@ -23,15 +24,11 @@ import numpy as np
 from torax import output
 from torax import state
 from torax.config import build_runtime_params
-from torax.config import profile_conditions as profile_conditions_lib
-from torax.config import runtime_params as general_runtime_params
 from torax.core_profiles import initialization
-from torax.geometry import geometry_provider
-from torax.geometry import pydantic_model as geometry_pydantic_model
 from torax.sources import source_models as source_models_lib
 from torax.sources import source_profiles as source_profiles_lib
 from torax.tests.test_lib import default_sources
-from torax.tests.test_lib import torax_refs
+from torax.torax_pydantic import model_config
 import xarray as xr
 
 
@@ -44,30 +41,36 @@ class StateHistoryTest(parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
-    runtime_params = general_runtime_params.GeneralRuntimeParams(
-        profile_conditions=profile_conditions_lib.ProfileConditions(
-            Ti_bound_right=27.7,
-            Te_bound_right={0.0: 42.0, 1.0: 0.0001},
-            ne_bound_right=({0.0: 0.1, 1.0: 2.0}, 'step'),
-        ),
-    )
-    sources = default_sources.get_default_sources()
+    self.torax_config = model_config.ToraxConfig.from_dict({
+        'runtime_params': {
+            'profile_conditions': {
+                'Ti_bound_right': 27.7,
+                'Te_bound_right': {0.0: 42.0, 1.0: 0.0001},
+                'ne_bound_right': ({0.0: 0.1, 1.0: 2.0}, 'step'),
+            },
+        },
+        'geometry': {'geometry_type': 'circular'},
+        'sources': default_sources.get_default_source_config(),
+        'stepper': {},
+        'transport': {
+            'transport_model': 'constant',
+            'chii_const': 2.0,
+        },
+        'pedestal': {},
+    })
     # Make some dummy source profiles that could have come from these sources.
-    self.geo = geometry_pydantic_model.CircularConfig().build_geometry()
+    self.geo = self.torax_config.geometry.build_provider(t=0.0)
     ones = jnp.ones_like(self.geo.rho)
-    geo_provider = geometry_provider.ConstantGeometryProvider(self.geo)
-    dynamic_runtime_params_slice, geo = (
-        torax_refs.build_consistent_dynamic_runtime_params_slice_and_geometry(
-            runtime_params,
-            geo_provider,
-            sources=sources,
-        )
+    dynamic_runtime_params_slice = (
+        build_runtime_params.DynamicRuntimeParamsSliceProvider.from_config(
+            self.torax_config
+        )(t=0.0)
     )
     self.source_profiles = source_profiles_lib.SourceProfiles(
         j_bootstrap=source_profiles_lib.BootstrapCurrentProfile.zero_profile(
-            geo
+            self.geo
         ),
-        qei=source_profiles_lib.QeiInfo.zeros(geo),
+        qei=source_profiles_lib.QeiInfo.zeros(self.geo),
         temp_ion={
             'fusion_heat_source': ones,
         },
@@ -79,22 +82,20 @@ class StateHistoryTest(parameterized.TestCase):
         ne={},
         psi={},
     )
-    static_slice = build_runtime_params.build_static_runtime_params_slice(
-        runtime_params=runtime_params,
-        sources=sources,
-        torax_mesh=geo.torax_mesh,
+    static_slice = build_runtime_params.build_static_params_from_config(
+        self.torax_config
     )
     source_models = source_models_lib.SourceModels(
-        sources=sources.source_model_config
+        sources=self.torax_config.sources.source_model_config
     )
 
     self.core_profiles = initialization.initial_core_profiles(
         dynamic_runtime_params_slice=dynamic_runtime_params_slice,
         static_runtime_params_slice=static_slice,
-        geo=geo,
+        geo=self.geo,
         source_models=source_models,
     )
-    self.core_transport = state.CoreTransport.zeros(geo)
+    self.core_transport = state.CoreTransport.zeros(self.geo)
     self.source_models = source_models
     # Setup a state history object.
     t = jnp.array(0.0)
@@ -105,7 +106,6 @@ class StateHistoryTest(parameterized.TestCase):
         core_sources=self.source_profiles,
         t=t,
         dt=dt,
-        post_processed_outputs=state.PostProcessedOutputs.zeros(self.geo),
         stepper_numeric_outputs=state.StepperNumericOutputs(
             outer_stepper_iterations=1,
             stepper_error_state=1,
@@ -114,11 +114,14 @@ class StateHistoryTest(parameterized.TestCase):
         geometry=self.geo,
     )
     sim_error = state.SimError.NO_ERROR
+    self._output_state = state.PostProcessedOutputs.zeros(self.geo)
 
     self.history = output.StateHistory(
         sim_error=sim_error,
         state_history=(self.sim_state,),
+        post_processed_outputs_history=(self._output_state,),
         source_models=self.source_models,
+        torax_config=self.torax_config,
     )
 
   def test_geometry_is_saved(self):
@@ -133,7 +136,12 @@ class StateHistoryTest(parameterized.TestCase):
     state_history = output.StateHistory(
         sim_error=state.SimError.NO_ERROR,
         state_history=(self.sim_state, self.sim_state_t2),
+        post_processed_outputs_history=(
+            self._output_state,
+            self._output_state,
+        ),
         source_models=self.source_models,
+        torax_config=self.torax_config,
     )
     output_xr = state_history.simulation_output_to_xr()
     print(output_xr.children[output.GEOMETRY].dataset.data_vars)
@@ -244,6 +252,22 @@ class StateHistoryTest(parameterized.TestCase):
         output.concat_datatrees(tree1, tree2),
         tree_expected,
     )
+
+  def test_config_is_saved(self):
+    """Tests that the config is saved correctly."""
+    output_xr = self.history.simulation_output_to_xr()
+    config_dict = json.loads(output_xr.dataset.attrs[output.CONFIG])
+    self.assertEqual(config_dict['transport']['transport_model'], 'constant')
+    self.assertEqual(config_dict['transport']['chii_const']['value'][1][0], 2.0)
+    # Default values are expected to be set in the saved config
+    self.assertEqual(config_dict['transport']['chie_const']['value'][1][0], 1.0)
+
+  def test_config_round_trip(self):
+    """Tests that the serialization/deserialization of the config is correct."""
+    output_xr = self.history.simulation_output_to_xr()
+    config_dict = json.loads(output_xr.dataset.attrs[output.CONFIG])
+    rebuilt_torax_config = model_config.ToraxConfig.from_dict(config_dict)
+    self.assertEqual(rebuilt_torax_config, self.torax_config)
 
 
 if __name__ == '__main__':

@@ -26,7 +26,6 @@ from torax.sources import generic_current_source
 from torax.sources import generic_particle_source as generic_particle_source_lib
 from torax.sources import pellet_source as pellet_source_lib
 from torax.sources import pydantic_model as sources_pydantic_model
-from torax.stepper import pydantic_model as stepper_pydantic_model
 from torax.tests.test_lib import default_sources
 from torax.torax_pydantic import torax_pydantic
 from torax.transport_model import pydantic_model as transport_pydantic_model
@@ -48,9 +47,6 @@ class RuntimeParamsSliceTest(parameterized.TestCase):
     torax_pydantic.set_grid(runtime_params, self._geo.torax_mesh)
     provider = build_runtime_params.DynamicRuntimeParamsSliceProvider(
         runtime_params=runtime_params,
-        transport=transport_pydantic_model.Transport(),
-        sources=sources_pydantic_model.Sources.from_dict({}),
-        stepper=stepper_pydantic_model.Stepper(),
         torax_mesh=self._geo.torax_mesh,
     )
     dynamic_runtime_params_slice = provider(
@@ -108,59 +104,49 @@ class RuntimeParamsSliceTest(parameterized.TestCase):
 
   def test_pedestal_is_time_dependent(self):
     """Tests that the pedestal runtime params are time dependent."""
-    runtime_params = general_runtime_params.GeneralRuntimeParams(
-        profile_conditions=profile_conditions_lib.ProfileConditions(
-            set_pedestal={0.0: True, 1.0: False},
-        )
-    )
+    runtime_params = general_runtime_params.GeneralRuntimeParams()
     torax_pydantic.set_grid(runtime_params, self._geo.torax_mesh)
-    pedestal = pedestal_pydantic_model.Pedestal.from_dict(
+    pedestal = pedestal_pydantic_model.SetTpedNped.from_dict(
         dict(
+            pedestal_model='set_tped_nped',
             Tiped={0.0: 0.0, 1.0: 1.0},
             Teped={0.0: 1.0, 1.0: 2.0},
             neped={0.0: 2.0, 1.0: 3.0},
             rho_norm_ped_top={0.0: 3.0, 1.0: 5.0},
+            set_pedestal={0.0: True, 1.0: False},
         )
     )
     # Check at time 0.
-    dcs_provider = build_runtime_params.DynamicRuntimeParamsSliceProvider(
+    slice_provider = build_runtime_params.DynamicRuntimeParamsSliceProvider(
         runtime_params,
         pedestal=pedestal,
         torax_mesh=self._geo.torax_mesh,
     )
 
-    dcs = dcs_provider(
+    dynamic_slice = slice_provider(
         t=0.0,
     )
-    profile_conditions = dcs.profile_conditions
-    dynamic_pedestal_runtime_params = dcs.pedestal
-    assert isinstance(
-        dynamic_pedestal_runtime_params,
-        set_tped_nped.DynamicRuntimeParams,
-    )
-    np.testing.assert_allclose(profile_conditions.set_pedestal, True)
-    np.testing.assert_allclose(dynamic_pedestal_runtime_params.Tiped, 0.0)
-    np.testing.assert_allclose(dynamic_pedestal_runtime_params.Teped, 1.0)
-    np.testing.assert_allclose(dynamic_pedestal_runtime_params.neped, 2.0)
+    pedestal_params = dynamic_slice.pedestal
+    assert isinstance(pedestal_params, set_tped_nped.DynamicRuntimeParams)
+    np.testing.assert_allclose(pedestal_params.set_pedestal, True)
+    np.testing.assert_allclose(pedestal_params.Tiped, 0.0)
+    np.testing.assert_allclose(pedestal_params.Teped, 1.0)
+    np.testing.assert_allclose(pedestal_params.neped, 2.0)
     np.testing.assert_allclose(
-        dynamic_pedestal_runtime_params.rho_norm_ped_top, 3.0
+        pedestal_params.rho_norm_ped_top, 3.0
     )
     # And check after the time limit.
-    dcs = dcs_provider(
+    dynamic_slice = slice_provider(
         t=1.0,
     )
-    profile_conditions = dcs.profile_conditions
-    dynamic_pedestal_runtime_params = dcs.pedestal
-    assert isinstance(
-        dynamic_pedestal_runtime_params,
-        set_tped_nped.DynamicRuntimeParams,
-    )
-    np.testing.assert_allclose(profile_conditions.set_pedestal, False)
-    np.testing.assert_allclose(dynamic_pedestal_runtime_params.Tiped, 1.0)
-    np.testing.assert_allclose(dynamic_pedestal_runtime_params.Teped, 2.0)
-    np.testing.assert_allclose(dynamic_pedestal_runtime_params.neped, 3.0)
+    pedestal_params = dynamic_slice.pedestal
+    assert isinstance(pedestal_params, set_tped_nped.DynamicRuntimeParams)
+    np.testing.assert_allclose(pedestal_params.set_pedestal, False)
+    np.testing.assert_allclose(pedestal_params.Tiped, 1.0)
+    np.testing.assert_allclose(pedestal_params.Teped, 2.0)
+    np.testing.assert_allclose(pedestal_params.neped, 3.0)
     np.testing.assert_allclose(
-        dynamic_pedestal_runtime_params.rho_norm_ped_top, 5.0
+        pedestal_params.rho_norm_ped_top, 5.0
     )
 
   def test_source_formula_config_has_time_dependent_params(self):
@@ -234,7 +220,6 @@ class RuntimeParamsSliceTest(parameterized.TestCase):
     dcs_provider = build_runtime_params.DynamicRuntimeParamsSliceProvider(
         runtime_params=runtime_params,
         sources=sources,
-        stepper=stepper_pydantic_model.Stepper(),
         torax_mesh=self._geo.torax_mesh,
     )
     # While wext is positive, this should be fine.
@@ -466,9 +451,7 @@ class RuntimeParamsSliceTest(parameterized.TestCase):
   ):
     """Tests that the dynamic slice provider can be updated."""
     runtime_params = general_runtime_params.GeneralRuntimeParams()
-    transport = transport_pydantic_model.Transport.from_dict(
-        {'De_inner': 1.0, 'transport_model': 'constant'}
-    )
+    transport = transport_pydantic_model.ConstantTransportModel(De_inner=1.0)
     geo = geometry_pydantic_model.CircularConfig(n_rho=4).build_geometry()
     provider = build_runtime_params.DynamicRuntimeParamsSliceProvider(
         runtime_params=runtime_params,
@@ -481,9 +464,8 @@ class RuntimeParamsSliceTest(parameterized.TestCase):
     self.assertEqual(dcs.transport.De_inner, 1.0)
 
     # Update something in transport.
-    transport = transport_pydantic_model.Transport.from_dict(
-        {'De_inner': 2.0, 'transport_model': 'constant'}
-    )
+    transport = transport_pydantic_model.ConstantTransportModel(De_inner=2.0)
+
     # Check pre-update that nothing has changed.
     dcs = provider(
         t=0.0,

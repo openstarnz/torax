@@ -54,44 +54,24 @@ Activate the virtual env:
 
 It is convenient to set up an alias for the above command.
 
-.. _install_qlknn_7_11:
-
-Install QLKNN_7_11
------------------------------
-
-.. code-block:: console
-
-  git clone https://github.com/google-deepmind/fusion_surrogates.git
-  pip install -e ./fusion_surrogates
-  export TORAX_QLKNN_MODEL_PATH="$PWD"/fusion_surrogates/fusion_surrogates/models/qlknn_7_11.qlknn
-
-We recommend automating the variable export. If using bash, run:
-
-.. code-block:: console
-
-  echo export TORAX_QLKNN_MODEL_PATH="$PWD"/fusion_surrogates/fusion_surrogates/models/qlknn_7_11.qlknn >> ~/.bashrc
-
-The above command only needs to be run once on a given system.
-
-An alternative to QLKNN_7_11 is QLKNN-hyper (See :ref:`install_qlknn_hyper`).
-
 .. install_torax:
 
-Install TORAX
--------------
+Install TORAX from PyPI
+-----------------------
 
-The following may optionally be added to ~/.bashrc and will cause jax to
-store compiled programs to the filesystem, avoiding recompilation in
-some cases:
+This is the simplest way to install TORAX. If you don't plan to do any
+development work, this is the recommended method.
 
 .. code-block:: console
 
-  export JAX_COMPILATION_CACHE_DIR=<path of your choice, such as ~/jax_cache>
-  export JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES=-1
-  export JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS=0.0
+  pip install torax
 
-For more information see :ref:`cache`.
 
+
+Install TORAX from Github
+-----------------------
+
+If you plan to develop TORAX, we recommend installing from source.
 
 Download and install the TORAX codebase via http:
 
@@ -109,38 +89,45 @@ Enter the TORAX directory and pip install the dependencies.
 
 .. code-block:: console
 
-  cd torax; pip install .
-
-From within the top level directory where you `pip install` from, also set the
-geometry data directory.
-
-.. code-block:: console
-
-  export TORAX_GEOMETRY_DIR="$PWD"/torax/data/third_party/geo
-
-As with the QLKNN dependencies, we recommend automating the variable export. If
-using bash, run:
-
-.. code-block:: console
-
-  echo export TORAX_GEOMETRY_DIR="$PWD"/torax/data/third_party/geo >> ~/.bashrc
-
-The above command only needs to be run once on a given system.
-
-.. _dev_install:
-
-(Optional) Install TORAX in development mode
---------------------------------------------
-
-**Recommended** for developers. Instead of the above, install optional dependencies
-for (parallel) pytest and documentation generation. Also install in editable mode to
-not require reinstallation for every change.
-
-.. code-block:: console
-
   cd torax; pip install -e .[dev]
 
-.. _dev_install:
+TORAX uses the QLKNN_7_11 transport model by default. It can be overridden by
+specifying a QLKNN model path through the `TORAX_QLKNN_MODEL_PATH`
+environment variable. To use the default transport model (recommended), keep the
+`TORAX_QLKNN_MODEL_PATH` environment variable empty. Previous versions of
+TORAX required the environment variable to be set. If you set this variable in
+a previous TORAX installation, make sure you do not define it in your
+`~/.bashrc`. You can check if the variable is defined by running:
+
+.. code-block:: console
+
+  echo $TORAX_QLKNN_MODEL_PATH
+
+If the variable is defined, you can clear it by running:
+
+.. code-block:: console
+
+  unset TORAX_QLKNN_MODEL_PATH
+
+For an alternative transport model, see :ref:`install_qlknn_hyper`.
+
+The same applies to `TORAX_GEOMETRY_DIR`. Previous versions of TORAX
+required it to be set. It is now recommended to leave the variable empty if
+using the default geometry. Make sure the definition is removed from
+`~/.bashrc` if you set it in a previous installation.
+
+
+The following may optionally be added to ~/.bashrc and will cause jax to
+store compiled programs to the filesystem, avoiding recompilation in
+some cases:
+
+.. code-block:: console
+
+  export JAX_COMPILATION_CACHE_DIR=<path of your choice, such as ~/jax_cache>
+  export JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES=-1
+  export JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS=0.0
+
+For more information see :ref:`cache`.
 
 (Optional) GPU support
 -------------------
@@ -155,12 +142,12 @@ https://jax.readthedocs.io/en/latest/installation.html#supported-platforms
 -------------------
 
 An alternative to QLKNN_7_11 is to use QLKNN-hyper-10D, also known as QLKNN10D
-[K.L. van de Plassche PoP 2020](https://doi.org/10.1063/1.5134126). QLKNN_7_11
-is based on QuaLiKiz 2.8.1 which has an improved collision operator compared to
-the QLKNN10D training set. QLKNN_7_11 training data includes impurity density
-gradients as an input feature and has better coverage of the near-LCFS region
-compared to QLKNN-hyper-10D. However, it is still widely used in other
-simulators, so it can be useful for comparative studies for instance.
+(`K.L. van de Plassche PoP 2020 <https://doi.org/10.1063/1.5134126>`_).
+QLKNN_7_11 is based on QuaLiKiz 2.8.1 which has an improved collision operator
+compared to the QLKNN10D training set. QLKNN_7_11 training data includes
+impurity density gradients as an input feature and has better coverage of the
+near-LCFS region compared to QLKNN-hyper-10D. However, it is still widely used
+in other simulators, so it can be useful for comparative studies for instance.
 
 Download QLKNN dependencies:
 
@@ -168,16 +155,9 @@ Download QLKNN dependencies:
 
   git clone https://gitlab.com/qualikiz-group/qlknn-hyper.git
 
+To use this transport model, you need to set the environment variable
+`TORAX_QLKNN_MODEL_PATH` to the path of the cloned repository.
+
 .. code-block:: console
 
   export TORAX_QLKNN_MODEL_PATH="$PWD"/qlknn-hyper
-
-It is recommended to automate the environment variable export. For example, if
-using bash, run:
-
-.. code-block:: console
-
-  echo export TORAX_QLKNN_MODEL_PATH="$PWD"/qlknn-hyper >> ~/.bashrc
-
-The above command only needs to be run once on a given system.
-

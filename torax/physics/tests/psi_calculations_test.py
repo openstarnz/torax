@@ -135,7 +135,9 @@ class PsiCalculationsTest(torax_refs.ReferenceValueTest):
         qei=source_profiles_lib.QeiInfo.zeros(geo),
     )
     static_slice = build_runtime_params.build_static_runtime_params_slice(
-        runtime_params=runtime_params,
+        profile_conditions=runtime_params.profile_conditions,
+        numerics=runtime_params.numerics,
+        plasma_composition=runtime_params.plasma_composition,
         sources=sources,
         torax_mesh=geo.torax_mesh,
     )
@@ -194,8 +196,7 @@ class PsiCalculationsTest(torax_refs.ReferenceValueTest):
     denom = _trapz(jtot_profile * geo.spr_hires, geo.rho_hires_norm)
     Ctot = Ip_tot * 1e6 / denom
     jtot = jtot_profile * Ctot
-    # pylint: disable=protected-access
-    psi_cell_variable = initialization._update_psi_from_j(
+    psi_cell_variable = initialization.update_psi_from_j(
         Ip_tot,
         geo,
         jtot,

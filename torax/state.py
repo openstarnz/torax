@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Classes defining the TORAX state that evolves over time."""
-import dataclasses
 import enum
 from typing import Optional
 
@@ -127,43 +126,25 @@ class CoreProfiles:
   Aimp: array_typing.ScalarFloat
   # pylint: enable=invalid-name
 
-  def history_elem(self) -> typing_extensions.Self:
-    """Returns the current CoreProfiles as a history entry.
-
-    Histories are CoreProfiles with all the tree leaves getting an extra
-    dimension due to stacking, e.g. as the output of `jax.lax.scan`.
-    Some CoreProfiles fields such as `cell_variable.CellVariable` cease to
-    function after becoming histories.
-    """
-
-    return dataclasses.replace(
-        self,
-        temp_ion=self.temp_ion.history_elem(),
-        temp_el=self.temp_el.history_elem(),
-        psi=self.psi.history_elem(),
-        psidot=self.psidot.history_elem(),
-        vloop_lcfs=self.vloop_lcfs,
-        ne=self.ne.history_elem(),
-        ni=self.ni.history_elem(),
-        nimp=self.nimp.history_elem(),
-        currents=self.currents,
-        q_face=self.q_face,
-        s_face=self.s_face,
-        nref=self.nref,
-        Zi=self.Zi,
-        Zi_face=self.Zi_face,
-        Ai=self.Ai,
-        Zimp=self.Zimp,
-        Zimp_face=self.Zimp_face,
-        Aimp=self.Aimp,
-    )
-
   def quasineutrality_satisfied(self) -> bool:
     """Checks if quasineutrality is satisfied."""
     return jnp.allclose(
         self.ni.value * self.Zi + self.nimp.value * self.Zimp,
         self.ne.value,
     ).item()
+
+  def negative_temperature_or_density(self) -> bool:
+    """Checks if any temperature or density is negative."""
+    profiles_to_check = (
+        self.temp_ion,
+        self.temp_el,
+        self.ne,
+        self.ni,
+        self.nimp,
+    )
+    return any(
+        [jnp.any(jnp.less(x, 0.0)) for x in jax.tree.leaves(profiles_to_check)]
+    )
 
   def index(self, i: int) -> typing_extensions.Self:
     """If the CoreProfiles is a history, returns the i-th CoreProfiles."""
@@ -183,18 +164,17 @@ class CoreProfiles:
       if hasattr(value, "sanity_check"):
         value.sanity_check()
 
-  def __hash__(self):
-    """Make CoreProfiles hashable.
-
-    Be careful, if a CoreProfiles gets garbage collected a different
-    CoreProfiles could have the same hash later, so it's important to always
-    store the CoreProfiles (to prevent it from being garbage collected) not just
-    its hash.
-
-    Returns:
-      hash: The hash, in this case, just the `id`, of the CoreProfiles.
+  def __str__(self) -> str:
+    return f"""
+      CoreProfiles(
+        temp_ion={self.temp_ion},
+        temp_el={self.temp_el},
+        psi={self.psi},
+        ne={self.ne},
+        nimp={self.nimp},
+        ni={self.ni},
+      )
     """
-    return id(self)
 
 
 @chex.dataclass
@@ -486,6 +466,12 @@ class PostProcessedOutputs:
         dW_th_dt=jnp.array(0.0, dtype=jax_utils.get_dtype()),
     )
 
+  def check_for_errors(self):
+    if has_nan(self):
+      return SimError.NAN_DETECTED
+    else:
+      return SimError.NO_ERROR
+
 
 @chex.dataclass
 class StepperNumericOutputs:
@@ -514,13 +500,17 @@ class SimError(enum.Enum):
   NO_ERROR = 0
   NAN_DETECTED = 1
   QUASINEUTRALITY_BROKEN = 2
+  NEGATIVE_CORE_PROFILES = 3
 
   def log_error(self):
     match self:
+      case SimError.NEGATIVE_CORE_PROFILES:
+        logging.error("""
+            Simulation stopped due to negative values in core profiles.
+            """)
       case SimError.NAN_DETECTED:
         logging.error("""
             Simulation stopped due to NaNs in state.
-            Possible cause is negative temperatures or densities.
             Output file contains all profiles up to the last valid step.
             """)
       case SimError.QUASINEUTRALITY_BROKEN:
@@ -562,31 +552,29 @@ class ToraxSimState:
     geometry: Geometry at this time step used for the simulation.
     time_step_calculator_state: the state of the TimeStepper.
     stepper_numeric_outputs: Numerical quantities related to the stepper.
+    sawtooth_crash: True if a sawtooth model is active and the state
+      corresponds to a post-sawtooth-crash state.
   """
 
-  # Time variables.
   t: jax.Array
   dt: jax.Array
-
-  # Profiles evolved or calculated by the simulation.
   core_profiles: CoreProfiles
   core_transport: CoreTransport
   core_sources: source_profiles.SourceProfiles
-
-  # Post-processed outputs after a step.
-  post_processed_outputs: PostProcessedOutputs
-
-  # Geometry used for the simulation.
   geometry: geometry.Geometry
-
-  # Other "side" states used for logging and feeding to other components of
-  # TORAX.
   stepper_numeric_outputs: StepperNumericOutputs
+  sawtooth_crash: bool = False
 
   def check_for_errors(self) -> SimError:
     """Checks for errors in the simulation state."""
+    if self.core_profiles.negative_temperature_or_density():
+      logging.info("%s", self.core_profiles)
+      log_negative_profile_names(self.core_profiles)
+      return SimError.NEGATIVE_CORE_PROFILES
+    # If there are NaNs that occured without negative core profiles, log this
+    # as a separate error.
     if has_nan(self):
-      log_nans(self)
+      logging.info("%s", self.core_profiles)
       return SimError.NAN_DETECTED
     elif not self.core_profiles.quasineutrality_satisfied():
       return SimError.QUASINEUTRALITY_BROKEN
@@ -594,14 +582,24 @@ class ToraxSimState:
       return SimError.NO_ERROR
 
 
-def has_nan(inputs: ToraxSimState) -> bool:
+def has_nan(inputs: ToraxSimState | PostProcessedOutputs) -> bool:
   return any([jnp.any(jnp.isnan(x)) for x in jax.tree.leaves(inputs)])
 
 
-def log_nans(inputs: ToraxSimState):
+def log_negative_profile_names(inputs: CoreProfiles):
   path_vals, _ = jax.tree.flatten_with_path(inputs)
   for path, value in path_vals:
-    if jnp.any(jnp.isnan(value)):
-      logging.info(
-          "Found NaN in %s, value=%s", jax.tree_util.keystr(path), value
-      )
+    if jnp.any(jnp.less(value, 0.0)):
+      logging.info("Found negative value in %s", jax.tree_util.keystr(path))
+
+
+def check_for_errors(
+    sim_state: ToraxSimState,
+    post_processed_outputs: PostProcessedOutputs,
+) -> SimError:
+  """Checks for errors in the simulation state."""
+  state_error = sim_state.check_for_errors()
+  if state_error != SimError.NO_ERROR:
+    return state_error
+  else:
+    return post_processed_outputs.check_for_errors()

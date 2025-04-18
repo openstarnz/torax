@@ -13,16 +13,19 @@
 # limitations under the License.
 
 """Base pydantic config for Transport models."""
+import abc
+
 import chex
 import pydantic
 from torax.torax_pydantic import interpolated_param_1d
 from torax.torax_pydantic import torax_pydantic
 from torax.transport_model import runtime_params
+from torax.transport_model import transport_model
 import typing_extensions
 
 
 # pylint: disable=invalid-name
-class TransportBase(torax_pydantic.BaseModelFrozen):
+class TransportBase(torax_pydantic.BaseModelFrozen, abc.ABC):
   """Base model holding parameters common to all transport models.
 
   Attributes:
@@ -40,7 +43,7 @@ class TransportBase(torax_pydantic.BaseModelFrozen):
     chie_inner: inner core electron heat equation diffusion term.
     rho_inner: normalized radius below which inner patch is applied.
     apply_outer_patch: set outer core transport coefficients (ad-hoc MHD/EM
-      transport). Only used when set_pedestal = False Useful for L-mode
+      transport). Only used when pedestal.set_pedestal = False Useful for L-mode
       near-edge region where QLKNN10D is not applicable.
     De_outer: outer core electron density diffusivity.
     Ve_outer: outer core electron density convection.
@@ -133,3 +136,7 @@ class TransportBase(torax_pydantic.BaseModelFrozen):
         smoothing_sigma=self.smoothing_sigma,
         smooth_everywhere=self.smooth_everywhere,
     )
+
+  @abc.abstractmethod
+  def build_transport_model(self) -> transport_model.TransportModel:
+    """Builds a transport model from the config."""
