@@ -49,7 +49,7 @@ def run_simulation(
       torax_config.sources.source_model_config
   )
 
-  stepper = torax_config.stepper.build_stepper_model(
+  stepper = torax_config.stepper.build_stepper(
       transport_model=transport_model,
       source_models=source_models,
       pedestal_model=pedestal_model,
@@ -66,57 +66,45 @@ def run_simulation(
   )
 
   static_runtime_params_slice = (
-      build_runtime_params.build_static_runtime_params_slice(
-          runtime_params=torax_config.runtime_params,
-          sources=torax_config.sources,
-          torax_mesh=torax_config.geometry.build_provider.torax_mesh,
-          stepper=torax_config.stepper,
-      )
+      build_runtime_params.build_static_params_from_config(torax_config)
   )
 
   dynamic_runtime_params_slice_provider = (
-      build_runtime_params.DynamicRuntimeParamsSliceProvider(
-          runtime_params=torax_config.runtime_params,
-          pedestal=torax_config.pedestal,
-          transport=torax_config.transport,
-          sources=torax_config.sources,
-          stepper=torax_config.stepper,
-          mhd=torax_config.mhd,
-          torax_mesh=torax_config.geometry.build_provider.torax_mesh,
-      )
-  )
-
-  dynamic_runtime_params_slice_for_init, geo_for_init = (
-      build_runtime_params.get_consistent_dynamic_runtime_params_slice_and_geometry(
-          t=torax_config.runtime_params.numerics.t_initial,
-          dynamic_runtime_params_slice_provider=dynamic_runtime_params_slice_provider,
-          geometry_provider=geometry_provider,
+      build_runtime_params.DynamicRuntimeParamsSliceProvider.from_config(
+          torax_config
       )
   )
 
   if torax_config.restart and torax_config.restart.do_restart:
-    initial_state = initial_state_lib.initial_state_from_file_restart(
-        file_restart=torax_config.restart,
-        static_runtime_params_slice=static_runtime_params_slice,
-        dynamic_runtime_params_slice_for_init=dynamic_runtime_params_slice_for_init,
-        geo_for_init=geo_for_init,
-        step_fn=step_fn,
+    initial_state, post_processed_outputs = (
+        initial_state_lib.get_initial_state_and_post_processed_outputs_from_file(
+            t_initial=torax_config.runtime_params.numerics.t_initial,
+            file_restart=torax_config.restart,
+            static_runtime_params_slice=static_runtime_params_slice,
+            dynamic_runtime_params_slice_provider=dynamic_runtime_params_slice_provider,
+            geometry_provider=geometry_provider,
+            step_fn=step_fn,
+        )
     )
     restart_case = True
   else:
-    initial_state = initial_state_lib.get_initial_state(
-        static_runtime_params_slice=static_runtime_params_slice,
-        dynamic_runtime_params_slice=dynamic_runtime_params_slice_for_init,
-        geo=geo_for_init,
-        step_fn=step_fn,
+    initial_state, post_processed_outputs = (
+        initial_state_lib.get_initial_state_and_post_processed_outputs(
+            t=torax_config.runtime_params.numerics.t_initial,
+            static_runtime_params_slice=static_runtime_params_slice,
+            dynamic_runtime_params_slice_provider=dynamic_runtime_params_slice_provider,
+            geometry_provider=geometry_provider,
+            step_fn=step_fn,
+        )
     )
     restart_case = False
 
-  state_history, sim_error = sim._run_simulation(  # pylint: disable=protected-access
+  state_history, post_processed_outputs_history, sim_error = sim._run_simulation(  # pylint: disable=protected-access
       static_runtime_params_slice=static_runtime_params_slice,
       dynamic_runtime_params_slice_provider=dynamic_runtime_params_slice_provider,
       geometry_provider=geometry_provider,
       initial_state=initial_state,
+      initial_post_processed_outputs=post_processed_outputs,
       restart_case=restart_case,
       step_fn=step_fn,
       log_timestep_info=log_timestep_info,
@@ -125,6 +113,8 @@ def run_simulation(
 
   return output.StateHistory(
       state_history=state_history,
+      post_processed_outputs_history=post_processed_outputs_history,
       sim_error=sim_error,
       source_models=source_models,
+      torax_config=torax_config,
   )

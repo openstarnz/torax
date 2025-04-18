@@ -16,7 +16,8 @@
 
 import copy
 import dataclasses
-from typing import Any, Literal, Union
+import os
+from typing import Any, Final, Literal, Union
 
 import chex
 import pydantic
@@ -26,17 +27,38 @@ from torax.transport_model import bohm_gyrobohm
 from torax.transport_model import constant
 from torax.transport_model import critical_gradient
 from torax.transport_model import pydantic_model_base
+from torax.transport_model import qlknn_10d
 from torax.transport_model import qlknn_transport_model
-from torax.transport_model import runtime_params
-from torax.transport_model import transport_model as transport_model_lib
+
+
+# Environment variable for the QLKNN model. Used if the model path
+# is not set in the config.
+_MODEL_PATH_ENV_VAR: Final[str] = 'TORAX_QLKNN_MODEL_PATH'
 
 
 # pylint: disable=invalid-name
 class QLKNNTransportModel(pydantic_model_base.TransportBase):
   """Model for the QLKNN transport model.
 
+  To determine which model to load, TORAX uses the following logic:
+
+  * If `model_path` is provided, then we load the model from this path.
+  * Otherwise, if the `TORAX_QLKNN_MODEL_PATH` environment variable is set,
+    then we load the model from this path.
+  * Otherwise, if `model_name` is provided, we load that model from registered
+    models in the `fusion_surrogates` library.
+  * If `model_name` is not set either, we load the default QLKNN model from
+    `fusion_surrogates` (currently `QLKNN_7_11`).
+
+  It is recommended to not set `model_name`, `TORAX_QLKNN_MODEL_PATH`  or
+  `model_path` to use the default QLKNN model.
+
   Attributes:
     transport_model: The transport model to use. Hardcoded to 'qlknn'.
+    model_path: Path to the model. Takes precedence over `model_name` and
+      `TORAX_QLKNN_MODEL_PATH`.
+    model_name: Name of the model to use. Used to select a model from the
+      `fusion_surrogates` library.
     include_ITG: Whether to include ITG modes.
     include_TEM: Whether to include TEM modes.
     include_ETG: Whether to include ETG modes.
@@ -59,7 +81,8 @@ class QLKNNTransportModel(pydantic_model_base.TransportBase):
       D.
   """
   transport_model: Literal['qlknn'] = 'qlknn'
-  model_path: str = qlknn_transport_model.get_default_model_path()
+  model_path: str = ''
+  model_name: str = ''
   include_ITG: bool = True
   include_TEM: bool = True
   include_ETG: bool = True
@@ -78,14 +101,16 @@ class QLKNNTransportModel(pydantic_model_base.TransportBase):
   @classmethod
   def _conform_data(cls, data: dict[str, Any]) -> dict[str, Any]:
     data = copy.deepcopy(data)
-    if 'model_path' in data:
-      model_path = data['model_path']
-    else:
-      model_path = qlknn_transport_model.get_default_model_path()
-      data['model_path'] = model_path
 
-    version = qlknn_transport_model.get_model(model_path).version
-    if version == '10D':
+    # Get the model path and update the config with the final path.
+    model_path = data.get('model_path', os.environ.get(_MODEL_PATH_ENV_VAR, ''))
+    model = qlknn_transport_model.get_model(
+        path=model_path, name=data.get('model_name', '')
+    )
+    # Update name from the loaded model.
+    data['model_name'] = model.name
+
+    if data['model_name'] == qlknn_10d.QLKNN10D_NAME:
       if 'coll_mult' not in data:
         # Correction factor to a more recent QLK collision operator.
         data['coll_mult'] = 0.25
@@ -99,7 +124,9 @@ class QLKNNTransportModel(pydantic_model_base.TransportBase):
     return data
 
   def build_transport_model(self) -> qlknn_transport_model.QLKNNTransportModel:
-    return qlknn_transport_model.QLKNNTransportModel(model_path=self.model_path)
+    return qlknn_transport_model.QLKNNTransportModel(
+        path=self.model_path, name=self.model_name
+    )
 
   def build_dynamic_params(
       self, t: chex.Numeric
@@ -295,7 +322,7 @@ try:
   # pylint: disable=g-import-not-at-top
   from torax.transport_model import qualikiz_transport_model
   # pylint: enable=g-import-not-at-top
-  TransportModelConfig = Union[
+  TransportConfig = Union[
       QLKNNTransportModel,
       ConstantTransportModel,
       CriticalGradientTransportModel,
@@ -303,46 +330,9 @@ try:
       qualikiz_transport_model.QualikizTransportModelConfig,
   ]
 except ImportError:
-  TransportModelConfig = Union[
+  TransportConfig = Union[
       QLKNNTransportModel,
       ConstantTransportModel,
       CriticalGradientTransportModel,
       BohmGyroBohmTransportModel,
   ]
-
-
-class Transport(torax_pydantic.BaseModelFrozen):
-  """Config for a transport model.
-
-  The `from_dict` method of constructing this class supports the config
-  described in: https://torax.readthedocs.io/en/latest/configuration.html
-  """
-  # Pytype does not like the conditional import.
-  # pytype: disable=invalid-annotation
-  transport_model_config: TransportModelConfig = pydantic.Field(
-      discriminator='transport_model'
-  )
-  # pytype: enable=invalid-annotation
-
-  @pydantic.model_validator(mode='before')
-  @classmethod
-  def _conform_data(cls, data: dict[str, Any]) -> dict[str, Any]:
-    # If we are running with the standard class constructor we don't need to do
-    # any custom validation.
-    if 'transport_model_config' in data:
-      return data
-
-    if 'transport_model' not in data:
-      data['transport_model'] = 'constant'
-
-    return {'transport_model_config': data}
-
-  def build_transport_model(self) -> transport_model_lib.TransportModel:
-    """Builds a transport model from the config."""
-    return self.transport_model_config.build_transport_model()
-
-  def build_dynamic_params(
-      self, t: chex.Numeric
-  ) -> runtime_params.DynamicRuntimeParams:
-    """Builds a dynamic runtime params from the config."""
-    return self.transport_model_config.build_dynamic_params(t)

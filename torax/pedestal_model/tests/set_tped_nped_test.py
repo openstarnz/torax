@@ -16,16 +16,13 @@ from absl.testing import absltest
 from absl.testing import parameterized
 from jax import numpy as jnp
 from torax.config import build_runtime_params
-from torax.config import runtime_params as general_runtime_params
 from torax.core_profiles import initialization
-from torax.geometry import pydantic_model as geometry_pydantic_model
-from torax.pedestal_model import pydantic_model as pedestal_pydantic_model
-from torax.sources import pydantic_model as source_pydantic_model
 from torax.sources import source_models as source_models_lib
+from torax.torax_pydantic import model_config
+# pylint: disable=invalid-name
 
 
 class SetTemperatureDensityPedestalModelTest(parameterized.TestCase):
-  """Tests for the `torax.pedestal_model.set_tped_nped` module."""
 
   @parameterized.product(
       Tiped=[5, {0.0: 5.0, 1.0: 10.0}],
@@ -36,7 +33,6 @@ class SetTemperatureDensityPedestalModelTest(parameterized.TestCase):
       time=[0.0, 1.0],
   )
   def test_build_and_call_pedestal_model(
-      # pylint: disable=invalid-name
       self,
       Tiped,
       Teped,
@@ -44,41 +40,40 @@ class SetTemperatureDensityPedestalModelTest(parameterized.TestCase):
       rho_norm_ped_top,
       neped_is_fGW,
       time,
-      # pylint: enable=invalid-name
   ):
-    """Test we can build and call the pedestal model with expected outputs."""
-    pedestal = pedestal_pydantic_model.Pedestal.from_dict(
+    torax_config = model_config.ToraxConfig.from_dict(
         dict(
-            pedestal_model='set_tped_nped',
-            Tiped=Tiped,
-            Teped=Teped,
-            rho_norm_ped_top=rho_norm_ped_top,
-            neped=neped,
-            neped_is_fGW=neped_is_fGW,
+            runtime_params=dict(),
+            geometry=dict(geometry_type='circular'),
+            pedestal=dict(
+                pedestal_model='set_tped_nped',
+                set_pedestal=True,
+                Tiped=Tiped,
+                Teped=Teped,
+                rho_norm_ped_top=rho_norm_ped_top,
+                neped=neped,
+                neped_is_fGW=neped_is_fGW,
+            ),
+            sources=dict(),
+            stepper=dict(),
+            transport=dict(),
         )
     )
-    runtime_params = general_runtime_params.GeneralRuntimeParams()
-    sources = source_pydantic_model.Sources()
-    source_models = source_models_lib.SourceModels(
-        sources=sources.source_model_config
+    provider = (
+        build_runtime_params.DynamicRuntimeParamsSliceProvider.from_config(
+            torax_config
+        )
     )
-    geo = geometry_pydantic_model.CircularConfig().build_geometry()
-    provider = build_runtime_params.DynamicRuntimeParamsSliceProvider(
-        runtime_params,
-        sources=sources,
-        torax_mesh=geo.torax_mesh,
-        pedestal=pedestal,
-    )
-    geo = geometry_pydantic_model.CircularConfig().build_geometry()
-    dynamic_runtime_params_slice = provider(t=time)
-    pedestal_model = pedestal.build_pedestal_model()
     static_runtime_params_slice = (
-        build_runtime_params.build_static_runtime_params_slice(
-            runtime_params=runtime_params,
-            sources=sources,
-            torax_mesh=geo.torax_mesh,
-        )
+        build_runtime_params.build_static_params_from_config(torax_config)
     )
+    source_models = source_models_lib.SourceModels(
+        sources=torax_config.sources.source_model_config
+    )
+
+    geo = torax_config.geometry.build_provider(time)
+    dynamic_runtime_params_slice = provider(t=time)
+    pedestal_model = torax_config.pedestal.build_pedestal_model()
     core_profiles = initialization.initial_core_profiles(
         static_runtime_params_slice,
         dynamic_runtime_params_slice,
@@ -111,14 +106,12 @@ class SetTemperatureDensityPedestalModelTest(parameterized.TestCase):
     else:
       expected_neped = neped[time]
     if neped_is_fGW:
-      # pylint: disable=invalid-name
       nGW = (
           dynamic_runtime_params_slice.profile_conditions.Ip_tot
           / (jnp.pi * geo.Rmin**2)
           * 1e20
           / dynamic_runtime_params_slice.numerics.nref
       )
-      # pylint: enable=invalid-name
       expected_neped *= nGW
     self.assertEqual(pedestal_model_output.neped, expected_neped)
 
