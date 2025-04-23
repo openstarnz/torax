@@ -285,17 +285,19 @@ class Geometry:
   @property
   def g0_over_vpr_face(self) -> jax.Array:
     """g0_face/vpr_face [:math:`m^{-1}`], equal to 1/rho_b on-axis."""
-    return jnp.nan_to_num(self.g0_face / self.vpr_face, nan=jnp.expand_dims(jnp.ones_like(self.rho_b) / self.rho_b, axis=-1))
+    sub = jnp.expand_dims(jnp.ones_like(self.rho_b) / self.rho_b, axis=-1)
+    return jnp.nan_to_num(self.g0_face / self.vpr_face, nan=sub, posinf=sub)
 
   @property
   def g1_over_vpr_face(self) -> jax.Array:
     r"""g1_face/vpr_face [:math:`\mathrm{m}`]. Zero on-axis."""
-    return jnp.nan_to_num(self.g1_face / self.vpr_face, nan=0.0)
+    return jnp.nan_to_num(self.g1_face / self.vpr_face, nan=0.0, posinf=0.0)
 
   @property
   def g1_over_vpr2_face(self) -> jax.Array:
     """g1_face/vpr_face**2 [:math:`m^{-2}`], equal to 1/rho_b**2 on-axis."""
-    return jnp.nan_to_num(self.g1_face / self.vpr_face ** 2, nan=jnp.expand_dims(jnp.ones_like(self.rho_b) / self.rho_b**2, axis=-1))
+    sub = jnp.expand_dims(jnp.ones_like(self.rho_b) / self.rho_b**2, axis=-1)
+    return jnp.nan_to_num(self.g1_face / self.vpr_face ** 2, nan=sub, posinf=sub)
 
   def z_magnetic_axis(self) -> chex.Numeric:
     """z position of magnetic axis [m]."""
