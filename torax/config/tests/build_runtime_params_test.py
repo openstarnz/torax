@@ -26,7 +26,6 @@ from torax.sources import generic_current_source
 from torax.sources import generic_particle_source as generic_particle_source_lib
 from torax.sources import pellet_source as pellet_source_lib
 from torax.sources import pydantic_model as sources_pydantic_model
-from torax.stepper import pydantic_model as stepper_pydantic_model
 from torax.tests.test_lib import default_sources
 from torax.torax_pydantic import torax_pydantic
 from torax.transport_model import pydantic_model as transport_pydantic_model
@@ -48,9 +47,6 @@ class RuntimeParamsSliceTest(parameterized.TestCase):
     torax_pydantic.set_grid(runtime_params, self._geo.torax_mesh)
     provider = build_runtime_params.DynamicRuntimeParamsSliceProvider(
         runtime_params=runtime_params,
-        transport=transport_pydantic_model.Transport(),
-        sources=sources_pydantic_model.Sources.from_dict({}),
-        stepper=stepper_pydantic_model.Stepper(),
         torax_mesh=self._geo.torax_mesh,
     )
     dynamic_runtime_params_slice = provider(
@@ -110,7 +106,7 @@ class RuntimeParamsSliceTest(parameterized.TestCase):
     """Tests that the pedestal runtime params are time dependent."""
     runtime_params = general_runtime_params.GeneralRuntimeParams()
     torax_pydantic.set_grid(runtime_params, self._geo.torax_mesh)
-    pedestal = pedestal_pydantic_model.Pedestal.from_dict(
+    pedestal = pedestal_pydantic_model.SetTpedNped.from_dict(
         dict(
             pedestal_model='set_tped_nped',
             Tiped={0.0: 0.0, 1.0: 1.0},
@@ -224,7 +220,6 @@ class RuntimeParamsSliceTest(parameterized.TestCase):
     dcs_provider = build_runtime_params.DynamicRuntimeParamsSliceProvider(
         runtime_params=runtime_params,
         sources=sources,
-        stepper=stepper_pydantic_model.Stepper(),
         torax_mesh=self._geo.torax_mesh,
     )
     # While wext is positive, this should be fine.
@@ -456,9 +451,7 @@ class RuntimeParamsSliceTest(parameterized.TestCase):
   ):
     """Tests that the dynamic slice provider can be updated."""
     runtime_params = general_runtime_params.GeneralRuntimeParams()
-    transport = transport_pydantic_model.Transport.from_dict(
-        {'De_inner': 1.0, 'transport_model': 'constant'}
-    )
+    transport = transport_pydantic_model.ConstantTransportModel(De_inner=1.0)
     geo = geometry_pydantic_model.CircularConfig(n_rho=4).build_geometry()
     provider = build_runtime_params.DynamicRuntimeParamsSliceProvider(
         runtime_params=runtime_params,
@@ -471,9 +464,8 @@ class RuntimeParamsSliceTest(parameterized.TestCase):
     self.assertEqual(dcs.transport.De_inner, 1.0)
 
     # Update something in transport.
-    transport = transport_pydantic_model.Transport.from_dict(
-        {'De_inner': 2.0, 'transport_model': 'constant'}
-    )
+    transport = transport_pydantic_model.ConstantTransportModel(De_inner=2.0)
+
     # Check pre-update that nothing has changed.
     dcs = provider(
         t=0.0,

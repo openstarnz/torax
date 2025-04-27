@@ -47,7 +47,7 @@ def prep_simulation(
         torax_config.sources.source_model_config
     )
 
-    stepper = torax_config.stepper.build_stepper_model(
+    stepper = torax_config.stepper.build_stepper(
         transport_model=transport_model,
         source_models=source_models,
         pedestal_model=pedestal_model,

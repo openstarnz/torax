@@ -14,6 +14,7 @@
 
 """Pydantic config for Torax."""
 
+import copy
 import logging
 from typing import Any, Mapping
 import pydantic
@@ -42,10 +43,13 @@ class ToraxConfig(torax_pydantic.BaseModelFrozen):
   Attributes:
     runtime_params: Config for the runtime parameters.
     geometry: Config for the geometry.
-    pedestal: Config for the pedestal model.
+    pedestal: Config for the pedestal model. If an empty dictionary is passed
+      in, the pedestal model will be set to `no_pedestal`.
     sources: Config for the sources.
-    stepper: Config for the stepper.
-    transport: Config for the transport model.
+    stepper: Config for the stepper. If an empty dictionary is passed in, the
+      stepper model will be set to `linear`.
+    transport: Config for the transport model. If an empty dictionary is passed
+      in, the transport model will be set to `constant`.
     mhd: Optional config for mhd models. If None, no MHD models are used.
     time_step_calculator: Optional config for the time step calculator. If not
       provided the default chi time step calculator is used.
@@ -57,10 +61,16 @@ class ToraxConfig(torax_pydantic.BaseModelFrozen):
   # doesn't add much value.
   runtime_params: general_runtime_params.GeneralRuntimeParams
   geometry: geometry_pydantic_model.Geometry
-  pedestal: pedestal_pydantic_model.Pedestal
   sources: sources_pydantic_model.Sources
-  stepper: stepper_pydantic_model.Stepper
-  transport: transport_model_pydantic_model.Transport
+  stepper: stepper_pydantic_model.StepperConfig = pydantic.Field(
+      discriminator='stepper_type'
+  )
+  transport: transport_model_pydantic_model.TransportConfig = pydantic.Field(
+      discriminator='transport_model'
+  )
+  pedestal: pedestal_pydantic_model.PedestalConfig = pydantic.Field(
+      discriminator='pedestal_model'
+  )
   mhd: mhd_pydantic_model.MHD = mhd_pydantic_model.MHD()
   time_step_calculator: (
       time_step_calculator_pydantic_model.TimeStepCalculator
@@ -81,26 +91,38 @@ class ToraxConfig(torax_pydantic.BaseModelFrozen):
   def plasma_composition(self) -> plasma_composition_lib.PlasmaComposition:
     return self.runtime_params.plasma_composition
 
+  @pydantic.model_validator(mode='before')
+  @classmethod
+  def _defaults(cls, data: dict[str, Any]) -> dict[str, Any]:
+    configurable_data = copy.deepcopy(data)
+    if 'pedestal_model' not in configurable_data['pedestal']:
+      configurable_data['pedestal']['pedestal_model'] = 'no_pedestal'
+    if 'transport_model' not in configurable_data['transport']:
+      configurable_data['transport']['transport_model'] = 'constant'
+    if 'stepper_type' not in configurable_data['stepper']:
+      configurable_data['stepper']['stepper_type'] = 'linear'
+    return configurable_data
+
   @pydantic.model_validator(mode='after')
   def _check_fields(self) -> typing_extensions.Self:
-    using_nonlinear_transport_model = (
-        self.transport.transport_model_config.transport_model
-        in ['qlknn', 'CGM']
-    )
+    using_nonlinear_transport_model = self.transport.transport_model in [
+        'qlknn',
+        'CGM',
+    ]
     using_linear_solver = isinstance(
-        self.stepper.stepper_config, stepper_pydantic_model.LinearThetaMethod
+        self.stepper, stepper_pydantic_model.LinearThetaMethod
     )
     initial_guess_mode_is_linear = (
         False  # pylint: disable=g-long-ternary
         if using_linear_solver
-        else self.stepper.stepper_config.initial_guess_mode
+        else self.stepper.initial_guess_mode
         == enums.InitialGuessMode.LINEAR
     )
 
     if (
         using_nonlinear_transport_model
         and (using_linear_solver or initial_guess_mode_is_linear)
-        and not self.stepper.stepper_config.use_pereverzev
+        and not self.stepper.use_pereverzev
     ):
       logging.warning("""
           use_pereverzev=False in a configuration where setting

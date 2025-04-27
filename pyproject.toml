@@ -7,10 +7,10 @@ name = "torax"
 description = "Differentiable 1D tokamak plasma transport simulator in JAX."
 readme = "README.md"
 requires-python = ">=3.10"
-license = {file = "LICENSE"}
-authors = [{name = "TORAX authors", email="torax-team@google.com"}]
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{name = "TORAX authors", email="torax-dev@google.com"}]
 classifiers = [
-    "License :: OSI Approved :: Apache Software License",
     "Intended Audience :: Science/Research",
 ]
 
@@ -43,8 +43,14 @@ dependencies = [
     "imas-python",
 ]
 
-# `version` is automatically set to use the `torax.__version__`
 dynamic = ["version"]
+
+[tool.setuptools.dynamic]
+version = {attr = "torax.version.TORAX_VERSION"}
+
+[project.scripts]
+run_torax = "torax.run_simulation_main:run"
+plot_torax = "torax.plotting.plotruns:run"
 
 [project.urls]
 homepage = "https://github.com/google-deepmind/torax"
@@ -84,10 +90,15 @@ pyink-indentation = 2
 pyink-use-majority-quotes = true
 
 [tool.setuptools]
-include-package-data = true
+include-package-data = false
 
 [tool.setuptools.packages.find]
 include = ["torax*"]
+exclude = ["*tests*"]
+
+[tool.setuptools.package-data]
+"torax.data.third_party.geo" = ["*"]
+
 
 [tool.pytest.ini_options]
 addopts = [

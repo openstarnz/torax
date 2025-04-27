@@ -22,6 +22,8 @@ from typing import IO
 import eqdsk
 import numpy as np
 import scipy
+import torax
+
 
 from torax.torax_imastools.util import load_IMAS_data
 
@@ -109,7 +111,7 @@ def load_geo_data(
     if 'TORAX_GEOMETRY_DIR' in os.environ:
       geometry_dir = os.environ['TORAX_GEOMETRY_DIR']
     else:
-      geometry_dir = 'torax/data/third_party/geo'
+      geometry_dir = os.path.join(torax.__path__[0], 'data/third_party/geo')
   filepath = os.path.join(geometry_dir, geometry_file)
 
   # initialize geometry from file

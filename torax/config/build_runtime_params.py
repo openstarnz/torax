@@ -36,7 +36,8 @@ from torax.sources import pydantic_model as sources_pydantic_model
 from torax.stepper import pydantic_model as stepper_pydantic_model
 from torax.torax_pydantic import model_config
 from torax.torax_pydantic import torax_pydantic
-from torax.transport_model import pydantic_model as transport_model_pydantic_model
+from torax.transport_model import pydantic_model as transport_pydantic_model
+from torax.transport_model import pydantic_model_base as base_transport_pydantic_model
 import typing_extensions
 
 
@@ -61,7 +62,7 @@ def build_static_runtime_params_slice(
     plasma_composition: plasma_composition_lib.PlasmaComposition,
     sources: sources_pydantic_model.Sources,
     torax_mesh: torax_pydantic.Grid1D,
-    stepper: stepper_pydantic_model.Stepper | None = None,
+    stepper: stepper_pydantic_model.StepperConfig | None = None,
 ) -> runtime_params_slice.StaticRuntimeParamsSlice:
   """Builds a StaticRuntimeParamsSlice.
 
@@ -87,7 +88,7 @@ def build_static_runtime_params_slice(
   Returns:
     A runtime_params_slice.StaticRuntimeParamsSlice.
   """
-  stepper = stepper or stepper_pydantic_model.Stepper()
+  stepper = stepper or stepper_pydantic_model.LinearThetaMethod()
   return runtime_params_slice.StaticRuntimeParamsSlice(
       sources={
           source_name: source_config.build_static_params()
@@ -150,10 +151,10 @@ class DynamicRuntimeParamsSliceProvider:
   def __init__(
       self,
       runtime_params: general_runtime_params_lib.GeneralRuntimeParams,
-      pedestal: pedestal_pydantic_model.Pedestal | None = None,
-      transport: transport_model_pydantic_model.Transport | None = None,
+      pedestal: pedestal_pydantic_model.BasePedestal | None = None,
+      transport: base_transport_pydantic_model.TransportBase | None = None,
       sources: sources_pydantic_model.Sources | None = None,
-      stepper: stepper_pydantic_model.Stepper | None = None,
+      stepper: stepper_pydantic_model.StepperConfig | None = None,
       mhd: mhd_pydantic_model.MHD | None = None,
       torax_mesh: torax_pydantic.Grid1D | None = None,
   ):
@@ -176,12 +177,10 @@ class DynamicRuntimeParamsSliceProvider:
         will be raised within the constructor of the interpolated variable.
     """
     torax_pydantic.set_grid(runtime_params, torax_mesh, mode='relaxed')
-    transport = transport or transport_model_pydantic_model.Transport.from_dict(
-        {'transport_model': 'qlknn'}
-    )
+    transport = transport or transport_pydantic_model.QLKNNTransportModel()
     sources = sources or sources_pydantic_model.Sources()
-    stepper = stepper or stepper_pydantic_model.Stepper()
-    pedestal = pedestal or pedestal_pydantic_model.Pedestal()
+    stepper = stepper or stepper_pydantic_model.LinearThetaMethod()
+    pedestal = pedestal or pedestal_pydantic_model.NoPedestal()
     mhd = mhd or mhd_pydantic_model.MHD()
     torax_pydantic.set_grid(sources, torax_mesh, mode='relaxed')
     self._torax_mesh = torax_mesh
