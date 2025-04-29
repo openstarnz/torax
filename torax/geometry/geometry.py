@@ -69,8 +69,7 @@ class Geometry:
   Attributes:
     geometry_type: Type of geometry model used. See `GeometryType` for options.
     torax_mesh: `Grid1D` object representing the radial mesh used by TORAX.
-    Phi: Toroidal magnetic flux at each radial grid point [:math:`\mathrm{Wb}`].
-    Phi_face: Toroidal magnetic flux at each radial face [:math:`\mathrm{Wb}`].
+    rho_b: Toroidal flux coordinate [:math:`\mathrm{m}`] at boundary (LCFS).
     Rmaj: Tokamak major radius (geometric center) [:math:`\mathrm{m}`].
     Rmin: Tokamak minor radius [:math:`\mathrm{m}`].
     B0: Vacuum toroidal magnetic field on axis [:math:`\mathrm{T}`].
@@ -164,8 +163,7 @@ class Geometry:
 
   geometry_type: GeometryType
   torax_mesh: torax_pydantic.Grid1D
-  Phi: chex.Array
-  Phi_face: chex.Array
+  rho_b: chex.Array
   Rmaj: chex.Array
   Rmin: chex.Array
   B0: chex.Array
@@ -217,6 +215,16 @@ class Geometry:
     )
 
   @property
+  def Phi(self) -> chex.Array:
+    """Toroidal magnetic flux at each radial grid point [Wb]."""
+    return np.pi * jnp.expand_dims(self.B0, axis=-1) * self.rho ** 2
+
+  @property
+  def Phi_face(self) -> chex.Array:
+    """Toroidal magnetic flux at each radial face [Wb]."""
+    return np.pi * jnp.expand_dims(self.B0, axis=-1) * self.rho_face ** 2
+
+  @property
   def rho_norm(self) -> chex.Array:
     r"""Normalized toroidal flux coordinate on cell grid [dimensionless]."""
     return self.torax_mesh.cell_centers
@@ -263,14 +271,9 @@ class Geometry:
     return self.drho_norm * self.rho_b
 
   @property
-  def rho_b(self) -> chex.Array:
-    """Toroidal flux coordinate [m] at boundary (LCFS)."""
-    return jnp.sqrt(self.Phib / np.pi / self.B0)
-
-  @property
   def Phib(self) -> chex.Array:
     r"""Toroidal flux at boundary (LCFS) :math:`\mathrm{Wb}`."""
-    return self.Phi_face[..., -1]
+    return np.pi * self.B0 * self.rho_b**2
 
   @property
   def g1_over_vpr(self) -> chex.Array:

@@ -110,8 +110,7 @@ class TimeDependentGeometryProvider:
   geometry_type: geometry.GeometryType
   torax_mesh: torax_pydantic.Grid1D
   drho_norm: interpolated_param.InterpolatedVarSingleAxis
-  Phi: interpolated_param.InterpolatedVarSingleAxis
-  Phi_face: interpolated_param.InterpolatedVarSingleAxis
+  rho_b: interpolated_param.InterpolatedVarSingleAxis
   Rmaj: interpolated_param.InterpolatedVarSingleAxis
   Rmin: interpolated_param.InterpolatedVarSingleAxis
   B0: interpolated_param.InterpolatedVarSingleAxis

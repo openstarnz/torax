@@ -248,6 +248,23 @@ class GeometryTest(parameterized.TestCase):
         stacked_geo.g1_over_vpr2_face[:, 0], 1 / stacked_geo.rho_b**2
     )
 
+  def test_rho_phi_match_chease(self):
+    """Test that the rho and Phi values match the definition of rho in terms of Phi for the CHEASE geometry."""
+    self._test_rho_phi_match(geometry_pydantic_model.CheaseConfig().build_geometry())
+
+  @parameterized.parameters([
+    dict(geometry_file='eqdsk_cocos02.eqdsk'),
+    dict(geometry_file='EQDSK_ITERhybrid_COCOS02.eqdsk'),
+  ])
+  def test_rho_phi_match_eqdsk(self, geometry_file):
+    """Test that the rho and Phi values match the definition of rho in terms of Phi for the EQDSK geometry."""
+    self._test_rho_phi_match(geometry_pydantic_model.EQDSKConfig(geometry_file=geometry_file).build_geometry())
+
+  def _test_rho_phi_match(self, geo):
+    np.testing.assert_allclose(np.pi * geo.B0 * geo.rho ** 2, geo.Phi)
+    np.testing.assert_allclose(np.pi * geo.B0 * geo.rho_face ** 2, geo.Phi_face)
+    np.testing.assert_allclose(np.pi * geo.B0 * geo.rho_b ** 2, geo.Phib)
+
 
 def _get_example_L_LY_data(
     len_psinorm: int, len_times: int, prefactor: float = 0.0
