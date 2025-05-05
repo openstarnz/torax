@@ -21,10 +21,14 @@ import copy
 from typing import Sequence, Final
 from unittest import mock
 
+import chex
+import jax.scipy.integrate
 from absl.testing import absltest
 from absl.testing import parameterized
+import jax.numpy as jnp
 from jax import tree
 import numpy as np
+from torax import constants
 from torax import output
 from torax import state
 from torax.orchestration import initial_state
@@ -550,6 +554,92 @@ class SimTest(sim_test_case.SimTestCase):
         torax_config.runtime_params.numerics.t_final,
     )
 
+  def test_convection_equilibrium(self):
+    torax_config = self._get_torax_config('test_convection_equilibrium.py')
+    state_history = run_simulation.run_simulation(torax_config)
+    actual_ne = state_history.core_profiles.ne.value[-1]
+    actual_Te = state_history.core_profiles.temp_el.value[-1]
+    actual_Ti = state_history.core_profiles.temp_ion.value[-1]
+
+    geo = torax_config.geometry.build_provider(0.0)
+    dynamic_params = torax_config.runtime_params.build_dynamic_params(0.0)
+    transport_params = torax_config.transport.build_dynamic_params(0.0)
+    self.assertTrue(dynamic_params.profile_conditions.ne_bound_right_is_absolute)
+
+    diffusion_coeff = jnp.array(transport_params.De_const)
+    convection_coeff = jnp.array(transport_params.Ve_const)
+    chi_e = jnp.array(transport_params.chie_const)
+    chi_i = jnp.array(transport_params.chii_const)
+    nref = jnp.array(dynamic_params.numerics.nref)
+
+    rho_norm = jnp.array(geo.rho_norm)
+    # The equilibrium solution has some numerical issues if rho_inner=0
+    rho_inner = jnp.array(1e-6)
+    rho_outer = jnp.array(geo.rho_b)
+    elongation_lcfs = jnp.array(geo.elongation_face[-1])
+    major_radius = jnp.array(geo.Rmaj)
+
+    rho_norm_hires = jnp.linspace(0, 1, 200)
+
+    ne_source = torax_config.sources.generic_particle_source.build_dynamic_params(0.0)
+    expected_ne_hires, expected_ne_flux_hires = n_equilibrium_solution(
+        rho_norm_hires,
+        diffusion_coeff,
+        convection_coeff,
+        rho_inner,
+        rho_outer,
+        jnp.array(dynamic_params.profile_conditions.ne_bound_right),
+        elongation_lcfs,
+        major_radius,
+        jnp.array(ne_source.deposition_location),
+        jnp.array(ne_source.particle_width),
+        jnp.array(ne_source.S_tot / nref),
+    )
+    expected_ne = jnp.interp(rho_norm, rho_norm_hires, expected_ne_hires)
+    np.testing.assert_allclose(actual_ne, expected_ne, rtol=3e-4)
+
+    heat_source = torax_config.sources.generic_ion_el_heat_source.build_dynamic_params(0.0)
+    heat_source_location = jnp.array(heat_source.rsource)
+    heat_source_width = jnp.array(heat_source.w)
+    heat_source_magnitude = jnp.array(heat_source.Ptot / (nref * constants.CONSTANTS.keV2J))
+
+    expected_Te_hires, _ = T_equilibrium_solution(
+        rho_norm_hires,
+        chi_e,
+        rho_inner,
+        rho_outer,
+        jnp.array(dynamic_params.profile_conditions.Te_bound_right),
+        elongation_lcfs,
+        major_radius,
+        heat_source_location,
+        heat_source_width,
+        heat_source_magnitude * heat_source.el_heat_fraction,
+        expected_ne_hires,
+        expected_ne_flux_hires,
+    )
+    expected_Te = jnp.interp(rho_norm, rho_norm_hires, expected_Te_hires)
+    np.testing.assert_allclose(actual_Te, expected_Te, rtol=7e-4)
+
+    # Assume no impurities, and Z_i=1
+    expected_ni_hires = expected_ne_hires
+    expected_ni_flux_hires = expected_ne_flux_hires
+
+    expected_Ti_hires, _ = T_equilibrium_solution(
+        rho_norm_hires,
+        chi_i,
+        rho_inner,
+        rho_outer,
+        jnp.array(dynamic_params.profile_conditions.Ti_bound_right),
+        elongation_lcfs,
+        major_radius,
+        heat_source_location,
+        heat_source_width,
+        heat_source_magnitude * (1 - heat_source.el_heat_fraction),
+        expected_ni_hires,
+        expected_ni_flux_hires,
+    )
+    expected_Ti = jnp.interp(rho_norm, rho_norm_hires, expected_Ti_hires)
+    np.testing.assert_allclose(actual_Ti, expected_Ti, rtol=6e-4)
 
 def verify_core_profiles(ref_profiles, index, core_profiles):
   """Verify core profiles matches a reference at given index."""
@@ -618,6 +708,84 @@ def verify_core_profiles(ref_profiles, index, core_profiles):
       core_profiles.currents.Ip_profile_face,
       ref_profiles[output.IP_PROFILE_FACE][index, :],
   )
+
+
+def n_equilibrium_solution(
+    rho_norm, D, V, rho_inner, rho_outer,
+    n_right_bound, elongation_lcfs, major_radius,
+    source_center, source_width, source_magnitude,
+):
+    vpr, g0, g1 = geometry_values(rho_norm, rho_inner, rho_outer, elongation_lcfs, major_radius)
+    source = gaussian_source(rho_norm, vpr, source_center, source_width, source_magnitude)
+    return integral_solution(
+        rho_norm,
+        -D * g1 / vpr,
+        V * g0,
+        source,
+        n_right_bound,
+    )
+
+
+def T_equilibrium_solution(
+    rho_norm, chi, rho_inner, rho_outer,
+    T_right_bound, elongation_lcfs, major_radius,
+    source_center, source_width, source_magnitude,
+    particle_density, particle_flux,
+):
+    vpr, g0, g1 = geometry_values(rho_norm, rho_inner, rho_outer, elongation_lcfs, major_radius)
+
+    source = gaussian_source(rho_norm, vpr, source_center, source_width, source_magnitude)
+
+    return integral_solution(
+        rho_norm,
+        -particle_density*chi*g1/vpr,
+        5/2*particle_flux,
+        source,
+        T_right_bound,
+    )
+
+
+def gaussian_source(rho_norm, vpr, center, width, magnitude):
+    unnormalised_source = jnp.exp(-(rho_norm - center) ** 2 / 2 / width ** 2)
+    prefactor = magnitude / jax.scipy.integrate.trapezoid(unnormalised_source * vpr, rho_norm)
+    return unnormalised_source * prefactor * vpr
+
+
+def geometry_values(rho_norm, rho_inner, rho_outer, elongation_lcfs, major_radius):
+    elongation_fcfs = 1 + rho_inner / rho_outer * (elongation_lcfs - 1)
+    rho = rho_inner + (rho_outer - rho_inner) * rho_norm
+    elongation = elongation_fcfs + (elongation_lcfs - elongation_fcfs) * rho_norm
+    volume = 2 * jnp.pi ** 2 * major_radius * rho ** 2 * elongation
+    vpr = 4 * jnp.pi ** 2 * major_radius * rho * (rho_outer - rho_inner) * elongation + volume * (
+            elongation_lcfs - elongation_fcfs) / elongation
+    g0 = vpr / (rho_outer - rho_inner)
+    g1 = g0 ** 2
+
+    return vpr, g0, g1
+
+
+def integral_solution(xs, a, b, s, bound):
+    """
+    Solves the ODE a(x) y'(x) + b(x) y(x) = c + int(s(x)) for y(x) given a(x), b(x) and s(x).
+    c is determined by the boundary conditions.
+    The left bound is y'(0) = 0, and the right bound is y(x_max) = bound.
+    x_min should be zero, or very close to zero.
+    """
+
+    chex.assert_equal_shape([xs, a, b])
+
+    b_over_a_integral = cumulative_integrate(b / a, xs)
+    exp_integral = cumulative_integrate(jnp.exp(b_over_a_integral) / a, xs)
+    source_integral = cumulative_integrate(s, xs)
+    exp_source_integral = cumulative_integrate(jnp.exp(b_over_a_integral) * source_integral / a, xs)
+    alpha = jnp.exp(-b_over_a_integral) * (1/b[0] + exp_integral)
+    beta = jnp.exp(-b_over_a_integral) * (s[0]/b[0] + exp_source_integral)
+    c = (bound - beta[-1]) / alpha[-1]
+    return c * alpha + beta, c + source_integral
+
+
+def cumulative_integrate(y, x):
+    return jnp.concatenate([jnp.array([0.0]), 0.5 * (jnp.diff(x) * (y[1:] + y[:-1])).cumsum()])
 
 
 if __name__ == '__main__':

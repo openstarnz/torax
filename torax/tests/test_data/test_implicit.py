@@ -18,7 +18,8 @@
 CONFIG = {
     'runtime_params': {
         'profile_conditions': {
-            'ne_bound_right': 0.5,
+            'set_pedestal': False,
+            'ne_bound_right': 0.8,
         },
         'numerics': {
             't_final': 1,
@@ -42,7 +43,9 @@ CONFIG = {
         },
     },
     'pedestal': {},
-    'transport': {},
+    'transport': {
+        'transport_model': 'constant',
+    },
     'stepper': {
         'stepper_type': 'linear',
         'predictor_corrector': False,
