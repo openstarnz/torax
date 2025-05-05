@@ -176,6 +176,10 @@ class PlotData:
       m^{-3}}`].
     W_thermal_tot: Total thermal stored energy [:math:`\mathrm{MJ}`].
     q95: Safety factor at 95% of the normalized poloidal flux.
+    flux_temp_ion: Ion temperature flux
+    flux_temp_el: Electron temperature flux
+    flux_ni: Ion particle flux
+    flux_ne: Electron particle flux
   """
 
   ti: np.ndarray
@@ -410,6 +414,10 @@ def load_data(filename: str) -> PlotData:
       W_thermal_tot=post_processed_outputs_dataset['W_thermal_tot'].to_numpy(),
       q95=post_processed_outputs_dataset['q95'].to_numpy(),
       t=time,
+      flux_temp_ion=post_processed_outputs_dataset['flux_temp_ion_face'].to_numpy(),
+      flux_temp_el=post_processed_outputs_dataset['flux_temp_el_face'].to_numpy(),
+      flux_ni=post_processed_outputs_dataset['flux_ni_face'].to_numpy(),
+      flux_ne=post_processed_outputs_dataset['flux_ne_face'].to_numpy(),
   )
 
 
