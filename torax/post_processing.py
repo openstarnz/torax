@@ -339,10 +339,10 @@ def make_post_processed_outputs(
   v_face = sim_state.core_transport.v_face_el
   d_face = sim_state.core_transport.d_face_el
   prof = sim_state.core_profiles
-  flux_temp_ion_face = calc_coeffs.calc_temp_flux(geo, prof.ni, prof.temp_ion, v_face, d_face, chi_face_ion)
-  flux_temp_el_face = calc_coeffs.calc_temp_flux(geo, prof.ne, prof.temp_el, v_face, d_face, chi_face_el)
-  flux_ni_face = calc_coeffs.calc_particle_flux(geo, prof.ni, v_face, d_face)
-  flux_ne_face = calc_coeffs.calc_particle_flux(geo, prof.ne, v_face, d_face)
+  flux_temp_ion_face = calc_coeffs.calc_temp_flux(sim_state.geometry, prof.ni, prof.temp_ion, v_face, d_face, chi_face_ion)
+  flux_temp_el_face = calc_coeffs.calc_temp_flux(sim_state.geometry, prof.ne, prof.temp_el, v_face, d_face, chi_face_el)
+  flux_ni_face = calc_coeffs.calc_particle_flux(sim_state.geometry, prof.ni, v_face, d_face)
+  flux_ne_face = calc_coeffs.calc_particle_flux(sim_state.geometry, prof.ne, v_face, d_face)
 
   # pylint: enable=invalid-name
   return state.PostProcessedOutputs(
