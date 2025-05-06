@@ -739,3 +739,26 @@ def calc_particle_flux(
 ) -> jax.Array:
   """Calculate the particle flux, normalised to nref."""
   return v_face * geo.g0_face * n.face_value() - d_face * geo.g1_over_vpr_face * n.face_grad()
+
+
+def calc_eta(
+    temp_profile: cell_variable.CellVariable,
+    dens_profile: cell_variable.CellVariable,
+):
+  return temp_profile.face_grad() / temp_profile.face_value() * dens_profile.face_value() / dens_profile.face_grad()
+
+
+def calc_d(geo: geometry.Geometry, core_profiles: state.CoreProfiles):
+  total_pressure = (
+      core_profiles.temp_ion.face_value() * core_profiles.ni.face_value()
+      + core_profiles.temp_el.face_value() * core_profiles.ne.face_value()
+  )
+  total_pressure_grad = (
+      core_profiles.temp_ion.face_grad() * core_profiles.ni.face_value()
+      + core_profiles.temp_ion.face_value() * core_profiles.ni.face_grad()
+      + core_profiles.temp_el.face_grad() * core_profiles.ne.face_value()
+      + core_profiles.temp_el.face_value() * core_profiles.ne.face_grad()
+  )
+  U = geo.vpr_face / core_profiles.psi.face_grad()
+  U_grad = jnp.gradient(U, geo.rho_face_norm)
+  return total_pressure_grad / total_pressure * U / U_grad
