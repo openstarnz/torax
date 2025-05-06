@@ -343,9 +343,10 @@ def make_post_processed_outputs(
   flux_temp_el_face = calc_coeffs.calc_temp_flux(sim_state.geometry, prof.ne, prof.temp_el, v_face, d_face, chi_face_el)
   flux_ni_face = calc_coeffs.calc_particle_flux(sim_state.geometry, prof.ni, v_face, d_face)
   flux_ne_face = calc_coeffs.calc_particle_flux(sim_state.geometry, prof.ne, v_face, d_face)
-  eta_ion = calc_coeffs.calc_eta(prof.temp_ion, prof.ni)
-  eta_el = calc_coeffs.calc_eta(prof.temp_el, prof.ne)
-  d_total = calc_coeffs.calc_d(sim_state.geometry, prof)
+  # For now, NaNs are replaced with zero. This should probably be fixed in a better way for the future
+  eta_ion = jnp.nan_to_num(calc_coeffs.calc_eta(prof.temp_ion, prof.ni), nan=0.0)
+  eta_el = jnp.nan_to_num(calc_coeffs.calc_eta(prof.temp_el, prof.ne), nan=0.0)
+  d_total = jnp.nan_to_num(calc_coeffs.calc_d(sim_state.geometry, prof), nan=0.0)
 
   # pylint: enable=invalid-name
   return state.PostProcessedOutputs(
