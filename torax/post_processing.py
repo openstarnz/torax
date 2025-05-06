@@ -343,6 +343,9 @@ def make_post_processed_outputs(
   flux_temp_el_face = calc_coeffs.calc_temp_flux(sim_state.geometry, prof.ne, prof.temp_el, v_face, d_face, chi_face_el)
   flux_ni_face = calc_coeffs.calc_particle_flux(sim_state.geometry, prof.ni, v_face, d_face)
   flux_ne_face = calc_coeffs.calc_particle_flux(sim_state.geometry, prof.ne, v_face, d_face)
+  eta_ion = calc_coeffs.calc_eta(prof.temp_ion, prof.ni)
+  eta_el = calc_coeffs.calc_eta(prof.temp_el, prof.ne)
+  d_total = calc_coeffs.calc_d(sim_state.geometry, prof)
 
   # pylint: enable=invalid-name
   return state.PostProcessedOutputs(
@@ -385,4 +388,7 @@ def make_post_processed_outputs(
       flux_temp_el_face=flux_temp_el_face,
       flux_ni_face=flux_ni_face,
       flux_ne_face=flux_ne_face,
+      eta_ion=eta_ion,
+      eta_el=eta_el,
+      d_total=d_total,
   )
