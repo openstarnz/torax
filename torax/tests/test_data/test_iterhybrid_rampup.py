@@ -50,6 +50,7 @@ CONFIG = {
         'numerics': {
             # simulation control
             't_final': 80,  # length of simulation time in seconds
+            'exact_t_final': True,
             'fixed_dt': 2,
             # 1/multiplication factor for sigma (conductivity) to reduce current
             # diffusion timescale to be closer to heat diffusion timescale.

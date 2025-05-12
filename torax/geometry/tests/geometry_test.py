@@ -151,13 +151,14 @@ class GeometryTest(parameterized.TestCase):
   def test_update_phibdot(self):
     """Test update_phibdot for circular geometries."""
     geo = geometry_pydantic_model.CircularConfig().build_geometry()
-    geo0 = dataclasses.replace(geo, Phi_face=np.array([1.0]))
-    geo1 = dataclasses.replace(geo, Phi_face=np.array([2.0]))
+    geo0 = dataclasses.replace(geo, rho_b=np.array(1.0))
+    geo1 = dataclasses.replace(geo, rho_b=np.array(2.0))
     geo0_updated, geo1_updated = geometry.update_geometries_with_Phibdot(
         dt=0.1, geo_t=geo0, geo_t_plus_dt=geo1
     )
-    np.testing.assert_allclose(geo0_updated.Phibdot, 10.)
-    np.testing.assert_allclose(geo1_updated.Phibdot, 10.)
+    expected_Phibdot = np.pi * geo0.B0 * (2.0 ** 2 - 1.0 ** 2) / 0.1
+    np.testing.assert_allclose(geo0_updated.Phibdot, expected_Phibdot)
+    np.testing.assert_allclose(geo1_updated.Phibdot, expected_Phibdot)
 
 
 def _pint_face_to_cell(n_rho, face):

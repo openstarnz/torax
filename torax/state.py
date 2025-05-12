@@ -334,6 +334,13 @@ class PostProcessedOutputs:
     Wpol: Total magnetic energy [J]
     li3: Normalized plasma internal inductance, ITER convention [dimensionless]
     dW_th_dt: Time derivative of the total stored thermal energy [W]
+    flux_temp_ion_face: Ion heat flux [keV nref s^-1]
+    flux_temp_el_face: Electron heat flux [keV nref s^-1]
+    flux_ni_face: Main ion particle flux [nref s^-1]
+    flux_ne_face: Electron particle flux [nref s^-1]
+    eta_ion: Ion temperature vs density gradient [dimensionless]
+    eta_el: Electron temperature vs density gradient [dimensionless]
+    d_total: Total pressure vs volume gradient [dimensionless]
   """
 
   pressure_thermal_ion_face: array_typing.ArrayFloat
@@ -399,6 +406,13 @@ class PostProcessedOutputs:
   Wpol: array_typing.ScalarFloat
   li3: array_typing.ScalarFloat
   dW_th_dt: array_typing.ScalarFloat
+  flux_temp_ion_face: array_typing.ArrayFloat
+  flux_temp_el_face: array_typing.ArrayFloat
+  flux_ni_face: array_typing.ArrayFloat
+  flux_ne_face: array_typing.ArrayFloat
+  eta_ion: array_typing.ArrayFloat
+  eta_el: array_typing.ArrayFloat
+  d_total: array_typing.ArrayFloat
   # pylint: enable=invalid-name
 
   @classmethod
@@ -464,6 +478,13 @@ class PostProcessedOutputs:
         Wpol=jnp.array(0.0, dtype=jax_utils.get_dtype()),
         li3=jnp.array(0.0, dtype=jax_utils.get_dtype()),
         dW_th_dt=jnp.array(0.0, dtype=jax_utils.get_dtype()),
+        flux_temp_ion_face=jnp.zeros(geo.rho_face.shape),
+        flux_temp_el_face=jnp.zeros(geo.rho_face.shape),
+        flux_ni_face=jnp.zeros(geo.rho_face.shape),
+        flux_ne_face=jnp.zeros(geo.rho_face.shape),
+        eta_ion=jnp.zeros(geo.rho.shape),
+        eta_el=jnp.zeros(geo.rho.shape),
+        d_total=jnp.zeros(geo.rho.shape),
     )
 
   def check_for_errors(self):

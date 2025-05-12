@@ -485,6 +485,20 @@ def _calc_coeffs_full(
   full_d_face_el += d_face_per_el
   full_v_face_el += v_face_per_el
 
+  # Convection term
+  # To maintaing quasineutrality, the electron particle convection and diffusion coefficients must be the same
+  ion_heat_convection = 5 / 2 * (
+      geo.g0_face * true_ni_face * v_face_el
+      - d_face_el * geo.g1_over_vpr_face * core_profiles.ni.face_grad() * dynamic_runtime_params_slice.numerics.nref
+  ) * consts.keV2J
+  el_heat_convection = 5 / 2 * (
+      geo.g0_face * true_ne_face * v_face_el
+      - d_face_el * geo.g1_over_vpr_face * core_profiles.ne.face_grad() * dynamic_runtime_params_slice.numerics.nref
+  ) * consts.keV2J
+
+  v_heat_face_ion += ion_heat_convection
+  v_heat_face_el += el_heat_convection
+
   # Add phibdot terms to heat transport convection
   v_heat_face_ion += (
       -3.0
@@ -700,3 +714,51 @@ def _calc_coeffs_reduced(
       transient_in_cell=transient_in_cell,
   )
   return coeffs
+
+
+def calc_temp_flux(
+    geo: geometry.Geometry,
+    n: cell_variable.CellVariable,
+    temp: cell_variable.CellVariable,
+    v_face: jax.Array,
+    d_face: jax.Array,
+    chi_face: jax.Array
+) -> jax.Array:
+  """Calculate the temperature flux, normalised to nref*keV2J."""
+  particle_flux = calc_particle_flux(geo, n, v_face, d_face)
+  convective_flux = 5 / 2 * temp.face_value() * particle_flux
+  diffusive_flux = -n.face_value() * chi_face * geo.g1_over_vpr_face * temp.face_grad()
+  return convective_flux + diffusive_flux
+
+
+def calc_particle_flux(
+    geo: geometry.Geometry,
+    n: cell_variable.CellVariable,
+    v_face: jax.Array,
+    d_face: jax.Array,
+) -> jax.Array:
+  """Calculate the particle flux, normalised to nref."""
+  return v_face * geo.g0_face * n.face_value() - d_face * geo.g1_over_vpr_face * n.face_grad()
+
+
+def calc_eta(
+    temp_profile: cell_variable.CellVariable,
+    dens_profile: cell_variable.CellVariable,
+):
+  return temp_profile.face_grad() / temp_profile.face_value() * dens_profile.face_value() / dens_profile.face_grad()
+
+
+def calc_d(geo: geometry.Geometry, core_profiles: state.CoreProfiles):
+  total_pressure = (
+      core_profiles.temp_ion.face_value() * core_profiles.ni.face_value()
+      + core_profiles.temp_el.face_value() * core_profiles.ne.face_value()
+  )
+  total_pressure_grad = (
+      core_profiles.temp_ion.face_grad() * core_profiles.ni.face_value()
+      + core_profiles.temp_ion.face_value() * core_profiles.ni.face_grad()
+      + core_profiles.temp_el.face_grad() * core_profiles.ne.face_value()
+      + core_profiles.temp_el.face_value() * core_profiles.ne.face_grad()
+  )
+  U = geo.vpr_face / core_profiles.psi.face_grad()
+  U_grad = jnp.gradient(U, geo.rho_face_norm)
+  return total_pressure_grad / total_pressure * U / U_grad

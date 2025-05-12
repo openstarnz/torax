@@ -22,7 +22,8 @@ just check that Crank-Nicolson doesn't deviate too far from that.
 CONFIG = {
     'runtime_params': {
         'profile_conditions': {
-            'ne_bound_right': 0.5,
+            'ne_bound_right': 0.8,
+            'set_pedestal': False,
         },
         'numerics': {
             't_final': 1,

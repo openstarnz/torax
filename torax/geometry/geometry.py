@@ -70,8 +70,7 @@ class Geometry:
   Attributes:
     geometry_type: Type of geometry model used. See `GeometryType` for options.
     torax_mesh: `Grid1D` object representing the radial mesh used by TORAX.
-    Phi: Toroidal magnetic flux at each radial grid point [:math:`\mathrm{Wb}`].
-    Phi_face: Toroidal magnetic flux at each radial face [:math:`\mathrm{Wb}`].
+    rho_b: Toroidal flux coordinate [:math:`\mathrm{m}`] at boundary (LCFS).
     Rmaj: Tokamak major radius (geometric center) [:math:`\mathrm{m}`].
     Rmin: Tokamak minor radius [:math:`\mathrm{m}`].
     B0: Vacuum toroidal magnetic field on axis [:math:`\mathrm{T}`].
@@ -165,8 +164,7 @@ class Geometry:
 
   geometry_type: GeometryType
   torax_mesh: torax_pydantic.Grid1D
-  Phi: chex.Array
-  Phi_face: chex.Array
+  rho_b: chex.Array
   Rmaj: chex.Array
   Rmin: chex.Array
   B0: chex.Array
@@ -218,6 +216,16 @@ class Geometry:
     )
 
   @property
+  def Phi(self) -> chex.Array:
+    """Toroidal magnetic flux at each radial grid point [Wb]."""
+    return np.pi * jnp.expand_dims(self.B0, axis=-1) * self.rho ** 2
+
+  @property
+  def Phi_face(self) -> chex.Array:
+    """Toroidal magnetic flux at each radial face [Wb]."""
+    return np.pi * jnp.expand_dims(self.B0, axis=-1) * self.rho_face ** 2
+
+  @property
   def rho_norm(self) -> chex.Array:
     r"""Normalized toroidal flux coordinate on cell grid [dimensionless]."""
     return self.torax_mesh.cell_centers
@@ -264,14 +272,9 @@ class Geometry:
     return self.drho_norm * self.rho_b
 
   @property
-  def rho_b(self) -> chex.Array:
-    """Toroidal flux coordinate [m] at boundary (LCFS)."""
-    return jnp.sqrt(self.Phib / np.pi / self.B0)
-
-  @property
   def Phib(self) -> chex.Array:
     r"""Toroidal flux at boundary (LCFS) :math:`\mathrm{Wb}`."""
-    return self.Phi_face[..., -1]
+    return np.pi * self.B0 * self.rho_b**2
 
   @property
   def g1_over_vpr(self) -> chex.Array:
@@ -286,32 +289,19 @@ class Geometry:
   @property
   def g0_over_vpr_face(self) -> jax.Array:
     """g0_face/vpr_face [:math:`m^{-1}`], equal to 1/rho_b on-axis."""
-    # Calculate the bulk of the array (excluding the first element)
-    # to avoid division by zero.
-    bulk = self.g0_face[..., 1:] / self.vpr_face[..., 1:]
-    first_element = jnp.ones_like(self.rho_b) / self.rho_b
-    # Concatenate to handle both 1D (no leading dim) and 2D cases
-    return jnp.concatenate(
-        [jnp.expand_dims(first_element, axis=-1), bulk], axis=-1
-    )
+    sub = jnp.expand_dims(jnp.ones_like(self.rho_b) / self.rho_b, axis=-1)
+    return jnp.nan_to_num(self.g0_face / self.vpr_face, nan=sub, posinf=sub)
 
   @property
   def g1_over_vpr_face(self) -> jax.Array:
     r"""g1_face/vpr_face [:math:`\mathrm{m}`]. Zero on-axis."""
-    bulk = self.g1_face[..., 1:] / self.vpr_face[..., 1:]
-    first_element = jnp.zeros_like(self.rho_b)
-    return jnp.concatenate(
-        [jnp.expand_dims(first_element, axis=-1), bulk], axis=-1
-    )
+    return jnp.nan_to_num(self.g1_face / self.vpr_face, nan=0.0, posinf=0.0)
 
   @property
   def g1_over_vpr2_face(self) -> jax.Array:
     """g1_face/vpr_face**2 [:math:`m^{-2}`], equal to 1/rho_b**2 on-axis."""
-    bulk = self.g1_face[..., 1:] / self.vpr_face[..., 1:] ** 2
-    first_element = jnp.ones_like(self.rho_b) / self.rho_b**2
-    return jnp.concatenate(
-        [jnp.expand_dims(first_element, axis=-1), bulk], axis=-1
-    )
+    sub = jnp.expand_dims(jnp.ones_like(self.rho_b) / self.rho_b**2, axis=-1)
+    return jnp.nan_to_num(self.g1_face / self.vpr_face ** 2, nan=sub, posinf=sub)
 
   def z_magnetic_axis(self) -> chex.Numeric:
     """z position of magnetic axis [m]."""

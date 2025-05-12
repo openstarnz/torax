@@ -21,6 +21,7 @@ from torax import jax_utils
 from torax import math_utils
 from torax import state
 from torax.config import runtime_params_slice
+from torax.fvm import calc_coeffs
 from torax.geometry import geometry
 from torax.physics import formulas
 from torax.physics import psi_calculations
@@ -333,6 +334,19 @@ def make_post_processed_outputs(
       Wpol,
       sim_state.core_profiles.currents.Ip_profile_face[-1],
   )
+  chi_face_ion = sim_state.core_transport.chi_face_ion
+  chi_face_el = sim_state.core_transport.chi_face_el
+  v_face = sim_state.core_transport.v_face_el
+  d_face = sim_state.core_transport.d_face_el
+  prof = sim_state.core_profiles
+  flux_temp_ion_face = calc_coeffs.calc_temp_flux(sim_state.geometry, prof.ni, prof.temp_ion, v_face, d_face, chi_face_ion)
+  flux_temp_el_face = calc_coeffs.calc_temp_flux(sim_state.geometry, prof.ne, prof.temp_el, v_face, d_face, chi_face_el)
+  flux_ni_face = calc_coeffs.calc_particle_flux(sim_state.geometry, prof.ni, v_face, d_face)
+  flux_ne_face = calc_coeffs.calc_particle_flux(sim_state.geometry, prof.ne, v_face, d_face)
+  # For now, NaNs are replaced with zero. This should probably be fixed in a better way for the future
+  eta_ion = jnp.nan_to_num(calc_coeffs.calc_eta(prof.temp_ion, prof.ni), nan=0.0)
+  eta_el = jnp.nan_to_num(calc_coeffs.calc_eta(prof.temp_el, prof.ne), nan=0.0)
+  d_total = jnp.nan_to_num(calc_coeffs.calc_d(sim_state.geometry, prof), nan=0.0)
 
   # pylint: enable=invalid-name
   return state.PostProcessedOutputs(
@@ -371,4 +385,11 @@ def make_post_processed_outputs(
       Wpol=Wpol,
       li3=li3,
       dW_th_dt=dW_th_dt,
+      flux_temp_ion_face=flux_temp_ion_face,
+      flux_temp_el_face=flux_temp_el_face,
+      flux_ni_face=flux_ni_face,
+      flux_ne_face=flux_ne_face,
+      eta_ion=eta_ion,
+      eta_el=eta_el,
+      d_total=d_total,
   )

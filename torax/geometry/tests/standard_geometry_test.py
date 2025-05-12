@@ -79,6 +79,24 @@ class GeometryTest(parameterized.TestCase):
     config = geometry_pydantic_model.EQDSKConfig(geometry_file=geometry_file)
     config.build_geometry()
 
+    # Ensure that the geometry is (approximately) correct at the magnetic axis
+    intermediate = standard_geometry.StandardGeometryIntermediates.from_eqdsk(
+      config.geometry_dir,
+      config.geometry_file,
+      config.hires_fac,
+      config.Ip_from_parameters,
+      config.n_rho,
+      config.n_surfaces,
+      config.last_surface_factor,
+    )
+    np.testing.assert_almost_equal(intermediate.Rin[0], intermediate.Rout[0], decimal=3)
+    np.testing.assert_almost_equal(intermediate.int_dl_over_Bp[0], 0, decimal=1)
+    np.testing.assert_almost_equal(intermediate.flux_surf_avg_1_over_R2[0], 1 / intermediate.Rin[0] ** 2, decimal=4)
+    np.testing.assert_almost_equal(intermediate.flux_surf_avg_RBp[0], 0, decimal=2)
+    np.testing.assert_almost_equal(intermediate.flux_surf_avg_R2Bp2[0], 0, decimal=5)
+    np.testing.assert_almost_equal(intermediate.flux_surf_avg_Bp2[0], 0, decimal=5)
+    np.testing.assert_almost_equal(intermediate.Ip_profile[0], 0, decimal=0)
+
   @pytest.mark.skipif(
       importlib.util.find_spec('imas') is None,
       reason='IMAS-Python optional dependency'
@@ -244,6 +262,23 @@ class GeometryTest(parameterized.TestCase):
     np.testing.assert_allclose(
         stacked_geo.g1_over_vpr2_face[:, 0], 1 / stacked_geo.rho_b**2
     )
+
+  def test_rho_phi_match_chease(self):
+    """Test that the rho and Phi values match the definition of rho in terms of Phi for the CHEASE geometry."""
+    self._test_rho_phi_match(geometry_pydantic_model.CheaseConfig().build_geometry())
+
+  @parameterized.parameters([
+    dict(geometry_file='eqdsk_cocos02.eqdsk'),
+    dict(geometry_file='EQDSK_ITERhybrid_COCOS02.eqdsk'),
+  ])
+  def test_rho_phi_match_eqdsk(self, geometry_file):
+    """Test that the rho and Phi values match the definition of rho in terms of Phi for the EQDSK geometry."""
+    self._test_rho_phi_match(geometry_pydantic_model.EQDSKConfig(geometry_file=geometry_file).build_geometry())
+
+  def _test_rho_phi_match(self, geo):
+    np.testing.assert_allclose(np.pi * geo.B0 * geo.rho ** 2, geo.Phi)
+    np.testing.assert_allclose(np.pi * geo.B0 * geo.rho_face ** 2, geo.Phi_face)
+    np.testing.assert_allclose(np.pi * geo.B0 * geo.rho_b ** 2, geo.Phib)
 
 
 def _get_example_L_LY_data(
