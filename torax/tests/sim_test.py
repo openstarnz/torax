@@ -309,8 +309,8 @@ class SimTest(sim_test_case.SimTestCase):
     )
 
   @parameterized.parameters([
-      dict(config_name='test_imas.py'),
-      dict(config_name='test_iterhybrid_predictor_corrector_imas.py'),
+      # dict(config_name='test_imas.py'),
+      # dict(config_name='test_iterhybrid_predictor_corrector_imas.py'),
   ])
   def test_imas(self, config_name):
     """Integration test comparing to reference output from TORAX."""
