@@ -122,6 +122,10 @@ def build_circular_geometry(
   g3 = 1 / (Rmaj**2 * (1 - (rho / Rmaj) ** 2) ** (3.0 / 2.0))
   g3_face = 1 / (Rmaj**2 * (1 - (rho_face / Rmaj) ** 2) ** (3.0 / 2.0))
 
+  # g4: <R^2> (done without a elongation correction)
+  g4 = Rmaj**2 + rho**2 / 2
+  g4_face = Rmaj**2 + rho_face**2 / 2
+
   # simplifying assumption for now, for J=R*B/(R0*B0)
   J = np.ones(len(rho))
   J_face = np.ones(len(rho_face))
@@ -198,6 +202,8 @@ def build_circular_geometry(
       g2_face=g2_face,
       g3=g3,
       g3_face=g3_face,
+      g4=g4,
+      g4_face=g4_face,
       g2g3_over_rhon=g2g3_over_rhon,
       g2g3_over_rhon_face=g2g3_over_rhon_face,
       g2g3_over_rhon_hires=g2g3_over_rhon_hires,
