@@ -133,6 +133,8 @@ class TimeDependentGeometryProvider:
   g2_face: interpolated_param.InterpolatedVarSingleAxis
   g3: interpolated_param.InterpolatedVarSingleAxis
   g3_face: interpolated_param.InterpolatedVarSingleAxis
+  g4: interpolated_param.InterpolatedVarSingleAxis
+  g4_face: interpolated_param.InterpolatedVarSingleAxis
   g2g3_over_rhon: interpolated_param.InterpolatedVarSingleAxis
   g2g3_over_rhon_face: interpolated_param.InterpolatedVarSingleAxis
   g2g3_over_rhon_hires: interpolated_param.InterpolatedVarSingleAxis

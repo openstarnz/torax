@@ -186,6 +186,8 @@ class Geometry:
   g2_face: chex.Array
   g3: chex.Array
   g3_face: chex.Array
+  g4: chex.Array
+  g4_face: chex.Array
   g2g3_over_rhon: chex.Array
   g2g3_over_rhon_face: chex.Array
   g2g3_over_rhon_hires: chex.Array
