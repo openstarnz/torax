@@ -173,6 +173,7 @@ class StandardGeometryIntermediates:
   flux_surf_avg_Bp2: chex.Array
   flux_surf_avg_RBp: chex.Array
   flux_surf_avg_R2Bp2: chex.Array
+  flux_surf_avg_R2: chex.Array
   delta_upper_face: chex.Array
   delta_lower_face: chex.Array
   elongation: chex.Array
@@ -229,6 +230,7 @@ class StandardGeometryIntermediates:
       self.flux_surf_avg_1_over_R2[-1] = set_edge(self.flux_surf_avg_1_over_R2)
       self.flux_surf_avg_RBp[-1] = set_edge(self.flux_surf_avg_RBp)
       self.flux_surf_avg_R2Bp2[-1] = set_edge(self.flux_surf_avg_R2Bp2)
+      self.flux_surf_avg_R2[-1] = set_edge(self.flux_surf_avg_R2)
       self.vpr[-1] = set_edge(self.vpr)
 
     # Near-axis smoothing of quantities with known near-axis trends with rho
@@ -334,6 +336,7 @@ class StandardGeometryIntermediates:
         flux_surf_avg_Bp2=flux_surf_avg_Bp2,
         flux_surf_avg_RBp=flux_surf_avg_RBp,
         flux_surf_avg_R2Bp2=flux_surf_avg_R2Bp2,
+        flux_surf_avg_R2=None,  # TODO
         delta_upper_face=chease_data['delta_upper'],
         delta_lower_face=chease_data['delta_bottom'],
         elongation=chease_data['elongation'],
@@ -580,6 +583,7 @@ class StandardGeometryIntermediates:
         flux_surf_avg_Bp2=np.abs(LY['Q3Q']) / (4 * np.pi**2),
         flux_surf_avg_RBp=np.abs(LY['Q5Q']) / (2 * np.pi),
         flux_surf_avg_R2Bp2=np.abs(LY['Q4Q']) / (2 * np.pi) ** 2,
+        flux_surf_avg_R2=None,
         delta_upper_face=LY['deltau'],
         delta_lower_face=LY['deltal'],
         elongation=LY['kappa'],
@@ -897,6 +901,7 @@ class StandardGeometryIntermediates:
         flux_surf_avg_RBp=flux_surf_avg_RBp_eqdsk,
         flux_surf_avg_R2Bp2=flux_surf_avg_R2Bp2_eqdsk,
         flux_surf_avg_Bp2=flux_surf_avg_Bp2_eqdsk,
+        flux_surf_avg_R2=None,  # TODO
         delta_upper_face=delta_upper_face_eqdsk,
         delta_lower_face=delta_lower_face_eqdsk,
         elongation=elongation,
@@ -939,6 +944,7 @@ def build_standard_geometry(
   g1 = C1 * C4 * 4 * np.pi**2  # <(\nabla psi)**2> * (dV/dpsi) ** 2
   g2 = C1 * C3 * 4 * np.pi**2  # <(\nabla psi)**2 / R**2> * (dV/dpsi) ** 2
   g3 = intermediate.flux_surf_avg_1_over_R2  # <1/R**2>
+  g4 = intermediate.flux_surf_avg_R2  # <R**2>
   g2g3_over_rhon = g2[1:] * g3[1:] / rho_norm_intermediate[1:]
   g2g3_over_rhon = np.concatenate((np.zeros(1), g2g3_over_rhon))
 
@@ -1063,6 +1069,9 @@ def build_standard_geometry(
   g3_face = rhon_interpolation_func(rho_face_norm, g3)
   g3 = rhon_interpolation_func(rho_norm, g3)
 
+  g4_face = rhon_interpolation_func(rho_face_norm, g4)
+  g4 = rhon_interpolation_func(rho_norm, g4)
+
   g2g3_over_rhon_face = rhon_interpolation_func(rho_face_norm, g2g3_over_rhon)
   g2g3_over_rhon_hires = rhon_interpolation_func(rho_hires_norm, g2g3_over_rhon)
   g2g3_over_rhon = rhon_interpolation_func(rho_norm, g2g3_over_rhon)
@@ -1097,6 +1106,8 @@ def build_standard_geometry(
       g2_face=g2_face,
       g3=g3,
       g3_face=g3_face,
+      g4=g4,
+      g4_face=g4_face,
       g2g3_over_rhon=g2g3_over_rhon,
       g2g3_over_rhon_face=g2g3_over_rhon_face,
       g2g3_over_rhon_hires=g2g3_over_rhon_hires,
