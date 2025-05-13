@@ -56,6 +56,7 @@ class GeometryTest(parameterized.TestCase):
         flux_surf_avg_Bp2=np.arange(0, 1.0, 0.01),
         flux_surf_avg_RBp=np.arange(0, 1.0, 0.01),
         flux_surf_avg_R2Bp2=np.arange(0, 1.0, 0.01),
+        flux_surf_avg_R2 = np.arange(0, 1.0, 0.01),
         delta_upper_face=np.arange(0, 1.0, 0.01),
         delta_lower_face=np.arange(0, 1.0, 0.01),
         elongation=np.arange(0, 1.0, 0.01),
