@@ -310,6 +310,7 @@ class StandardGeometryIntermediates:
 
     int_dl_over_Bp = chease_data['Int(Rdlp/|grad(psi)|)=Int(Jdchi)'] * Rmaj / B0
     flux_surf_avg_1_over_R2 = chease_data['<1/R**2>'] / Rmaj**2
+    flux_surf_avg_R2 = chease_data['<R**2>'] * Rmaj**2
     flux_surf_avg_Bp2 = chease_data['<Bp**2>'] * B0**2
     flux_surf_avg_RBp = chease_data['<|grad(psi)|>'] * psiunnormfactor / Rmaj
     flux_surf_avg_R2Bp2 = (
@@ -336,7 +337,7 @@ class StandardGeometryIntermediates:
         flux_surf_avg_Bp2=flux_surf_avg_Bp2,
         flux_surf_avg_RBp=flux_surf_avg_RBp,
         flux_surf_avg_R2Bp2=flux_surf_avg_R2Bp2,
-        flux_surf_avg_R2=None,  # TODO
+        flux_surf_avg_R2=flux_surf_avg_R2,
         delta_upper_face=chease_data['delta_upper'],
         delta_lower_face=chease_data['delta_bottom'],
         elongation=chease_data['elongation'],
@@ -583,7 +584,7 @@ class StandardGeometryIntermediates:
         flux_surf_avg_Bp2=np.abs(LY['Q3Q']) / (4 * np.pi**2),
         flux_surf_avg_RBp=np.abs(LY['Q5Q']) / (2 * np.pi),
         flux_surf_avg_R2Bp2=np.abs(LY['Q4Q']) / (2 * np.pi) ** 2,
-        flux_surf_avg_R2=None,
+        flux_surf_avg_R2=1 / LY['Q2Q'],  # TODO: Not actually correct
         delta_upper_face=LY['deltau'],
         delta_lower_face=LY['deltal'],
         elongation=LY['kappa'],
@@ -746,6 +747,7 @@ class StandardGeometryIntermediates:
     flux_surf_avg_Bp2_eqdsk = np.empty(n_surfaces)  # <Bp**2>
     flux_surf_avg_RBp_eqdsk = np.empty(n_surfaces)  # <|grad(psi)|>
     flux_surf_avg_R2Bp2_eqdsk = np.empty(n_surfaces)  # <|grad(psi)|**2>
+    flux_surf_avg_R2_eqdsk = np.empty(n_surfaces)
     int_dl_over_Bp_eqdsk = np.empty(
         n_surfaces
     )  # int(Rdl / | grad(psi) |)
@@ -792,6 +794,10 @@ class StandardGeometryIntermediates:
           np.sum(surface_abs_grad_psi**2 * surface_dl / surface_Bpol)
           / surface_int_dl_over_bpol
       )
+      surface_FSA_int_r2 = (
+          np.sum(x_surface**2 * surface_dl / surface_Bpol)
+          / surface_int_dl_over_bpol
+      )
 
       # volumes and areas
       area = calculate_area(x_surface, z_surface)
@@ -825,6 +831,7 @@ class StandardGeometryIntermediates:
       flux_surf_avg_RBp_eqdsk[n] = surface_FSA_abs_grad_psi
       flux_surf_avg_R2Bp2_eqdsk[n] = surface_FSA_abs_grad_psi2
       flux_surf_avg_Bp2_eqdsk[n] = surface_FSA_Bpol_squared
+      flux_surf_avg_R2_eqdsk[n] = surface_FSA_int_r2
       Ip_eqdsk[n] = surface_int_bpol_dl / constants.CONSTANTS.mu0
       delta_upper_face_eqdsk[n] = surface_delta_upper_face
       delta_lower_face_eqdsk[n] = surface_delta_lower_face
@@ -842,6 +849,7 @@ class StandardGeometryIntermediates:
       flux_surf_avg_RBp_eqdsk[0] = 0
       flux_surf_avg_R2Bp2_eqdsk[0] = 0
       flux_surf_avg_Bp2_eqdsk[0] = 0
+      flux_surf_avg_R2_eqdsk[0] = Raxis**2
       Ip_eqdsk[0] = 0
       delta_upper_face_eqdsk[0] = delta_upper_face_eqdsk[1]
       delta_lower_face_eqdsk[0] = delta_lower_face_eqdsk[1]
@@ -901,7 +909,7 @@ class StandardGeometryIntermediates:
         flux_surf_avg_RBp=flux_surf_avg_RBp_eqdsk,
         flux_surf_avg_R2Bp2=flux_surf_avg_R2Bp2_eqdsk,
         flux_surf_avg_Bp2=flux_surf_avg_Bp2_eqdsk,
-        flux_surf_avg_R2=None,  # TODO
+        flux_surf_avg_R2=flux_surf_avg_R2_eqdsk,
         delta_upper_face=delta_upper_face_eqdsk,
         delta_lower_face=delta_lower_face_eqdsk,
         elongation=elongation,
