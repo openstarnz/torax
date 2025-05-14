@@ -115,7 +115,7 @@ class CriticalGradientDipoleModel(transport_model.TransportModel):
   def _calc_deltas(self, eta, d):
     return self._calc_deltas_from_lines(eta, d, [[2, 1/3], [-1.5, 5/3+2/3*1.5], [0, 0.44]], [2/3, -2/3*(0.44-8/3)])
 
-  def _closest_point_on_line(self, x, y, x0, y0, x1):
+  def _closest_point_on_line(self, x_0, y_0, a, b, c):
     return (b * (b * x_0 - a * y_0) - a * c) / (a ** 2 + b ** 2), (a * (-b * x_0 + a * y_0) - b * c) / (a ** 2 + b ** 2)
 
   def _calc_deltas_from_lines(self, x, y, lines, bounds):
