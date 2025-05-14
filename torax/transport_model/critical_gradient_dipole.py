@@ -6,6 +6,7 @@ from torax.pedestal_model import pedestal_model as pedestal_model_lib
 from torax.transport_model import transport_model
 from torax.fvm.calc_coeffs import calc_eta, calc_d, calc_particle_flux, calc_temp_flux
 from torax.constants import CONSTANTS
+from torax.physics import collisions
 
 
 class CriticalGradientDipoleModel(transport_model.TransportModel):
@@ -27,7 +28,7 @@ class CriticalGradientDipoleModel(transport_model.TransportModel):
     nref = dynamic_runtime_params_slice.numerics.nref
 
     # Classical
-    ne_classical_flux, Te_classical_flux, Ti_classical_flux = self._calculate_classical_flux(geo)
+    ne_classical_flux, Te_classical_flux, Ti_classical_flux = self._calculate_classical_flux(core_profiles, geo, nref)
 
     # Turbulent
     ne_turbulent_flux, Te_turbulent_flux, Ti_turbulent_flux = self._calculate_turbulent_flux(geo)
@@ -59,13 +60,41 @@ class CriticalGradientDipoleModel(transport_model.TransportModel):
 
     return coeffs
 
-  def _calculate_classical_flux(self, geo: geometry.Geometry):
-    return jnp.zeros_like(geo.rho_face_norm), jnp.zeros_like(geo.rho_face_norm), jnp.zeros_like(geo.rho_face_norm)
+  def _calculate_classical_flux(self, core_profiles: state.CoreProfiles, geo: geometry.Geometry, nref):
+    n = core_profiles.ne.face_value() * nref
+    Te = core_profiles.temp_el.face_value() * CONSTANTS.keV2J
+    Ti = core_profiles.temp_ion.face_value() * CONSTANTS.keV2J
+    Te_grad = core_profiles.temp_el.face_grad() * CONSTANTS.keV2J
+    Ti_grad = core_profiles.temp_ion.face_grad() * CONSTANTS.keV2J
+    e = CONSTANTS.qe
+    psi_grad = core_profiles.psi.face_grad()
+    g4 = geo.g4_face
+    p_grad = (
+        core_profiles.ne.face_grad() * Te
+        + core_profiles.ne.face_value() * Te_grad
+        + core_profiles.ni.face_grad() * Ti
+        + core_profiles.ni.face_value() * Ti_grad
+    ) * nref
 
-  def _calculate_turbulent_flux(self, geo: geometry.Geometry):
-    eta_el = None
-    eta_ion = None
-    d = None
+    coulomb_log = collisions._calculate_lambda_ei(Te / CONSTANTS.keV2J, n)
+    print(coulomb_log)
+    prefactor = 12 * jnp.pi**(3/2) / jnp.sqrt(2.0) * CONSTANTS.epsilon0**2 / n / e**4 / coulomb_log
+    tau_ee = prefactor * jnp.sqrt(CONSTANTS.me) * Te**(3/2)
+    tau_ii = prefactor * jnp.sqrt(CONSTANTS.mp) * Ti**(3/2)
+
+    tau_e = tau_ee
+    tau_i = jnp.sqrt(2.0) * tau_ii
+
+    el_heat_flux = 4 * jnp.pi**2 * CONSTANTS.me * Te / tau_e / e**2 / psi_grad**2 * (3/2*p_grad - 4.66 * n * Te_grad) * g4
+    ion_heat_flux = -8 * jnp.pi**2 * n * Ti * CONSTANTS.mp / tau_i / e**2 / psi_grad**2 * Ti_grad * g4
+    el_particle_flux = -2 * jnp.pi * CONSTANTS.me / tau_e / e**2 * (p_grad - 3/2 * n * Te_grad) / psi_grad**2 * g4
+
+    return el_particle_flux, el_heat_flux, ion_heat_flux
+
+  def _calculate_turbulent_flux(self, core_profiles: state.CoreProfiles, geo: geometry.Geometry):
+    eta_el = calc_eta(core_profiles.temp_el, core_profiles.ne)
+    eta_ion = calc_eta(core_profiles.temp_ion, core_profiles.ni)
+    d = calc_d(geo, core_profiles)
 
     delta_eta_el, delta_d_el = self._calc_deltas(eta_el, d)
     delta_eta_ion, delta_d_ion = self._calc_deltas(eta_ion, d)
@@ -84,7 +113,38 @@ class CriticalGradientDipoleModel(transport_model.TransportModel):
     return ne_turbulent_flux, Te_turbulent_flux, Ti_turbulent_flux
 
   def _calc_deltas(self, eta, d):
-    pass  # TODO
+    return self._calc_deltas_from_lines(eta, d, [[2, 1/3], [-1.5, 5/3+2/3*1.5], [0, 0.44]], [2/3, -2/3*(0.44-8/3)])
+
+  def _closest_point_on_line(self, x, y, x0, y0, x1):
+    return (b * (b * x_0 - a * y_0) - a * c) / (a ** 2 + b ** 2), (a * (-b * x_0 + a * y_0) - b * c) / (a ** 2 + b ** 2)
+
+  def _calc_deltas_from_lines(self, x, y, lines, bounds):
+    best_dist = jnp.full_like(x, jnp.inf)
+    best_x = jnp.zeros_like(x)
+    best_y = jnp.zeros_like(y)
+    for i, line in enumerate(lines):
+      x0, y0 = self._closest_point_on_line(x, y, line[0], -1, line[1])
+      x0 = jnp.where(y < y0, x, x0)
+      y0 = jnp.where(y < y0, y, y0)
+      mask = jnp.full_like(x, True, dtype=bool)
+      if i > 0:
+        mask &= x0 > bounds[i-1]
+      if i < len(lines) - 1:
+        mask &= x0 < bounds[i]
+      dist2 = (x-x0)**2 + (y-y0)**2
+      mask &= dist2 < best_dist
+      best_dist = jnp.where(mask, dist2, best_dist)
+      best_x = jnp.where(mask, x0, best_x)
+      best_y = jnp.where(mask, y0, best_y)
+    for i, bound in enumerate(bounds):
+      x0 = bound
+      y0 = lines[i][0]*bound + lines[i][1]
+      dist2 = (x-x0)**2 + (y-y0)**2
+      mask = dist2 < best_dist
+      best_dist = jnp.where(mask, dist2, best_dist)
+      best_x = jnp.where(mask, x0, best_x)
+      best_y = jnp.where(mask, y0, best_y)
+    return jnp.abs(best_x-x), jnp.abs(best_y-y)
 
   def _critical_model(self, delta_d, delta_eta, b, c):
     return b * (delta_d**2 + delta_eta**2) ** (c/2)
