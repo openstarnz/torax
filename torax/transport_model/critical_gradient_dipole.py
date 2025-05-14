@@ -31,7 +31,7 @@ class CriticalGradientDipoleModel(transport_model.TransportModel):
     ne_classical_flux, Te_classical_flux, Ti_classical_flux = self._calculate_classical_flux(core_profiles, geo, nref)
 
     # Turbulent
-    ne_turbulent_flux, Te_turbulent_flux, Ti_turbulent_flux = self._calculate_turbulent_flux(geo)
+    ne_turbulent_flux, Te_turbulent_flux, Ti_turbulent_flux = self._calculate_turbulent_flux(core_profiles, geo)
 
     # Convert proper flux into transport coefficients
     ne_flux = ne_classical_flux + ne_turbulent_flux
