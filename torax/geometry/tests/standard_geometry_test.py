@@ -13,7 +13,8 @@
 # limitations under the License.
 
 import os
-
+import importlib
+import pytest
 from absl.testing import absltest
 from absl.testing import parameterized
 import jax
@@ -96,6 +97,20 @@ class GeometryTest(parameterized.TestCase):
     np.testing.assert_almost_equal(intermediate.flux_surf_avg_R2Bp2[0], 0, decimal=5)
     np.testing.assert_almost_equal(intermediate.flux_surf_avg_Bp2[0], 0, decimal=5)
     np.testing.assert_almost_equal(intermediate.Ip_profile[0], 0, decimal=0)
+
+  @pytest.mark.skipif(
+      importlib.util.find_spec('imas') is None,
+      reason='IMAS-Python optional dependency'
+  )
+  @parameterized.parameters([
+      dict(equilibrium_object='ITERhybrid_COCOS17_IDS_ddv4.nc'),
+  ])
+  def test_build_standard_geometry_from_IMAS(self, equilibrium_object):
+    """Test that the default IMAS geometry can be built."""
+    if importlib.util.find_spec('imas') is None:
+      self.skipTest('IMAS-Python optional dependency')
+    config = geometry_pydantic_model.IMASConfig(equilibrium_object=equilibrium_object)
+    config.build_geometry()
 
   def test_access_z_magnetic_axis_raises_error_for_chease_geometry(self):
     """Test that accessing z_magnetic_axis raises error for CHEASE geometry."""

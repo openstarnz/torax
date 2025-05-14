@@ -24,8 +24,8 @@ dependencies = [
     "jaxopt>=0.8.2",
     "flax>=0.10.0",
     "fusion_surrogates==0.1.0",
-    "matplotlib>=3.3.0",
-    "numpy>2",
+    "matplotlib==3.10.1",
+    "numpy==2.2.5",
     "setuptools;python_version>='3.10'",
     "chex>=0.1.88",
     "equinox>=0.11.3",
@@ -75,6 +75,10 @@ dev = [
 tutorial = [
     "seaborn",
     "notebook",
+]
+
+imas = [
+    "imas>=4.0.0",
 ]
 
 [tool.pyink]

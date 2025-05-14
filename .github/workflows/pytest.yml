@@ -65,6 +65,8 @@ jobs:
 
     - run: pip --version
 
+    - run: pip install imas-python>=2.0.0
+    - run: pip install --upgrade numpy
     - run: pip install -e .[dev]
     - run: pip freeze
 

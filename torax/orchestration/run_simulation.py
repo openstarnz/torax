@@ -24,8 +24,7 @@ new_sim_outputs = torax.run_simulation(torax_config)
 ```
 """
 
-from torax import output
-from torax import sim
+from torax import output, sim
 from torax.config import build_runtime_params
 from torax.orchestration import initial_state as initial_state_lib
 from torax.orchestration import step_function
@@ -33,14 +32,13 @@ from torax.sources import source_models as source_models_lib
 from torax.torax_pydantic import model_config
 
 
-def run_simulation(
+def prep_simulation(
     torax_config: model_config.ToraxConfig,
-    log_timestep_info: bool = False,
-    progress_bar: bool = True,
 ) -> output.StateHistory:
-  """Runs a TORAX simulation using the config and returns the outputs."""
-  # TODO(b/384767453): Remove the need for the step_fn and stepper to take the
-  # transport model and pedestal model.
+  """Prep a TORAX simulation using the config and returns the necessary
+  inputs for a simulation."""
+  # TODO(b/384767453): Remove the need for the step_fn and stepper to take
+  # the transport model and pedestal model.
   transport_model = torax_config.transport.build_transport_model()
   pedestal_model = torax_config.pedestal.build_pedestal_model()
 
@@ -98,6 +96,35 @@ def run_simulation(
         )
     )
     restart_case = False
+
+  return (
+      static_runtime_params_slice,
+      dynamic_runtime_params_slice_provider,
+      geometry_provider,
+      initial_state,
+      restart_case,
+      step_fn,
+      source_models,
+      post_processed_outputs,
+  )
+
+
+def run_simulation(
+    torax_config: model_config.ToraxConfig,
+    log_timestep_info: bool = False,
+    progress_bar: bool = True,
+) -> output.StateHistory:
+  """Runs a TORAX simulation using the config and returns the outputs."""
+  (
+      static_runtime_params_slice,
+      dynamic_runtime_params_slice_provider,
+      geometry_provider,
+      initial_state,
+      restart_case,
+      step_fn,
+      source_models,
+      post_processed_outputs,
+  ) = prep_simulation(torax_config)
 
   state_history, post_processed_outputs_history, sim_error = sim._run_simulation(  # pylint: disable=protected-access
       static_runtime_params_slice=static_runtime_params_slice,
