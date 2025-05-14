@@ -137,6 +137,9 @@ def geometry_from_IMAS(
     flux_surf_avg_Bp2 = (
         IMAS_data.profiles_1d.gm2 * (dpsidrhotor**2) / (4 * np.pi**2)
     )  # C3/C1
+    flux_surf_avg_R2 = (
+        IMAS_data.profiles_1d.gm6 * (dpsidrhotor**2) / (4 * np.pi**2)
+    )
     int_dl_over_Bp = dvoldpsi  # C1
     flux_surf_avg_1_over_R2 = IMAS_data.profiles_1d.gm1  # C2/C1
 
@@ -168,6 +171,7 @@ def geometry_from_IMAS(
         "flux_surf_avg_RBp": flux_surf_avg_RBp,
         "flux_surf_avg_R2Bp2": flux_surf_avg_R2Bp2,
         "flux_surf_avg_Bp2": flux_surf_avg_Bp2,
+        "flux_surf_avg_R2": flux_surf_avg_R2,
         "delta_upper_face": IMAS_data.profiles_1d.triangularity_upper,
         "delta_lower_face": IMAS_data.profiles_1d.triangularity_lower,
         "elongation": IMAS_data.profiles_1d.elongation,
@@ -246,6 +250,7 @@ def geometry_to_IMAS(
     eq.profiles_1d.gm7 = geometry.g0/(dvoldpsi * dpsidrhotor)
     eq.profiles_1d.gm3 = geometry.g1 / (dpsidrhotor ** 2 * dvoldpsi**2)
     eq.profiles_1d.gm2 = geometry.g2 / (dpsidrhotor ** 2 * dvoldpsi**2)
+    eq.profiles_1d.gm6 = geometry.g4 / (dpsidrhotor ** 2 * dvoldpsi**2)
 
     # Quantities computed by the transport code useful for coupling with equilibrium code
     eq.profiles_1d.pressure = face_to_cell(post_processed_outputs.pressure_thermal_tot_face)
