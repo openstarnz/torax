@@ -35,17 +35,29 @@ import os
 # Core profiles.
 CORE_PROFILES = "core_profiles"
 TEMP_EL = "temp_el"
+TEMP_EL_LEFT_BC = "temp_el_left_bc"
+TEMP_EL_LEFT_BC_IS_GRAD = "temp_el_left_bc_is_grad"
 TEMP_EL_RIGHT_BC = "temp_el_right_bc"
+TEMP_EL_RIGHT_BC_IS_GRAD = "temp_el_right_bc_is_grad"
 TEMP_ION = "temp_ion"
+TEMP_ION_LEFT_BC = "temp_ion_left_bc"
+TEMP_ION_LEFT_BC_IS_GRAD = "temp_ion_left_bc_is_grad"
 TEMP_ION_RIGHT_BC = "temp_ion_right_bc"
+TEMP_ION_RIGHT_BC_IS_GRAD = "temp_ion_right_bc_is_grad"
 PSI = "psi"
 PSIDOT = "psidot"
 PSI_RIGHT_GRAD_BC = "psi_right_grad_bc"
 PSI_RIGHT_BC = "psi_right_bc"
 NE = "ne"
+NE_LEFT_BC = "ne_left_bc"
+NE_LEFT_BC_IS_GRAD = "ne_left_bc_is_grad"
 NE_RIGHT_BC = "ne_right_bc"
+NE_RIGHT_BC_IS_GRAD = "ne_right_bc_is_grad"
 NI = "ni"
+NI_LEFT_BC = "ni_left_bc"
+NI_LEFT_BC_IS_GRAD = "ni_left_bc_is_grad"
 NI_RIGHT_BC = "ni_right_bc"
+NI_RIGHT_BC_IS_GRAD = "ni_right_bc_is_grad"
 JTOT = "jtot"
 JTOT_FACE = "jtot_face"
 JOHM = "johm"
@@ -271,10 +283,22 @@ class StateHistory:
     xr_dict = {}
 
     xr_dict[TEMP_EL] = self.core_profiles.temp_el.value
+    xr_dict[TEMP_EL_LEFT_BC] = self.core_profiles.temp_el.left_face_constraint
+    xr_dict[TEMP_EL_LEFT_BC_IS_GRAD] = (
+        self.core_profiles.temp_el.left_face_constraint_is_grad
+    )
     xr_dict[TEMP_EL_RIGHT_BC] = self.core_profiles.temp_el.right_face_constraint
+    xr_dict[TEMP_EL_RIGHT_BC_IS_GRAD] = (
+        self.core_profiles.temp_el.right_face_constraint_is_grad
+    )
     xr_dict[TEMP_ION] = self.core_profiles.temp_ion.value
-    xr_dict[TEMP_ION_RIGHT_BC] = (
-        self.core_profiles.temp_ion.right_face_constraint
+    xr_dict[TEMP_ION_LEFT_BC] = self.core_profiles.temp_ion.left_face_constraint
+    xr_dict[TEMP_ION_LEFT_BC_IS_GRAD] = (
+        self.core_profiles.temp_ion.left_face_constraint_is_grad
+    )
+    xr_dict[TEMP_ION_RIGHT_BC] = self.core_profiles.temp_ion.right_face_constraint
+    xr_dict[TEMP_ION_RIGHT_BC_IS_GRAD] = (
+        self.core_profiles.temp_ion.right_face_constraint_is_grad
     )
     xr_dict[PSI] = self.core_profiles.psi.value
     xr_dict[PSI_RIGHT_GRAD_BC] = (
@@ -283,9 +307,15 @@ class StateHistory:
     xr_dict[PSI_RIGHT_BC] = self.core_profiles.psi.right_face_constraint
     xr_dict[PSIDOT] = self.core_profiles.psidot.value
     xr_dict[NE] = self.core_profiles.ne.value
+    xr_dict[NE_LEFT_BC] = self.core_profiles.ne.left_face_constraint
+    xr_dict[NE_LEFT_BC_IS_GRAD] = self.core_profiles.ne.left_face_constraint_is_grad
     xr_dict[NE_RIGHT_BC] = self.core_profiles.ne.right_face_constraint
+    xr_dict[NE_RIGHT_BC_IS_GRAD] = self.core_profiles.ne.right_face_constraint_is_grad
     xr_dict[NI] = self.core_profiles.ni.value
+    xr_dict[NI_LEFT_BC] = self.core_profiles.ni.left_face_constraint
+    xr_dict[NI_LEFT_BC_IS_GRAD] = self.core_profiles.ni.left_face_constraint_is_grad
     xr_dict[NI_RIGHT_BC] = self.core_profiles.ni.right_face_constraint
+    xr_dict[NI_RIGHT_BC_IS_GRAD] = self.core_profiles.ni.right_face_constraint_is_grad
     xr_dict[ZIMP] = self.core_profiles.Zimp
     xr_dict[NIMP] = self.core_profiles.nimp.value
 

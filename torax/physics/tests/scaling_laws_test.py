@@ -40,11 +40,10 @@ class ScalingLawsTest(parameterized.TestCase):
     # Using mock.ANY instead of mock.create_autospec to maintain the Ip_total
     # property needed in calculate_plh_scaling_factor.
     core_profiles = state.CoreProfiles(
-        ne=cell_variable.CellVariable(
+        ne=cell_variable.CellVariable.of(
             value=jnp.ones_like(geo.rho_norm) * 2,
             left_face_grad_constraint=jnp.zeros(()),
-            right_face_grad_constraint=None,
-            right_face_constraint=jnp.array(2.0),
+            right_face_value_constraint=jnp.array(2.0),
             dr=geo.drho_norm,
         ),
         ni=mock.ANY,
@@ -106,11 +105,10 @@ class ScalingLawsTest(parameterized.TestCase):
     # Using mock.ANY instead of mock.create_autospec to maintain the Ip_total
     # property needed in calculate_plh_scaling_factor.
     core_profiles = state.CoreProfiles(
-        ne=cell_variable.CellVariable(
+        ne=cell_variable.CellVariable.of(
             value=jnp.ones_like(geo.rho_norm) * 2,
             left_face_grad_constraint=jnp.zeros(()),
-            right_face_grad_constraint=None,
-            right_face_constraint=jnp.array(2.0),
+            right_face_value_constraint=jnp.array(2.0),
             dr=geo.drho_norm,
         ),
         ni=mock.ANY,

@@ -669,7 +669,7 @@ def verify_core_profiles(ref_profiles, index, core_profiles):
       core_profiles.ne.value, ref_profiles[output.NE][index, :]
   )
   np.testing.assert_allclose(
-      core_profiles.ne.right_face_constraint,
+      core_profiles.ne.right_face_value_constraint,
       ref_profiles[output.NE_RIGHT_BC][index],
   )
   np.testing.assert_allclose(
@@ -682,7 +682,7 @@ def verify_core_profiles(ref_profiles, index, core_profiles):
       core_profiles.ni.value, ref_profiles[output.NI][index, :]
   )
   np.testing.assert_allclose(
-      core_profiles.ni.right_face_constraint,
+      core_profiles.ni.right_face_value_constraint,
       ref_profiles[output.NI_RIGHT_BC][index],
   )
 

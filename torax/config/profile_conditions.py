@@ -29,8 +29,14 @@ class DynamicProfileConditions:
 
   Ip_tot: array_typing.ScalarFloat
   vloop_lcfs: array_typing.ScalarFloat
+  Ti_bound_left: array_typing.ScalarFloat
+  Ti_bound_left_is_grad: bool
+  Te_bound_left: array_typing.ScalarFloat
+  Te_bound_left_is_grad: bool
   Ti_bound_right: array_typing.ScalarFloat
+  Ti_bound_right_is_grad: bool
   Te_bound_right: array_typing.ScalarFloat
+  Te_bound_right_is_grad: bool
   # Temperature profiles defined on the cell grid.
   Te: array_typing.ArrayFloat
   Ti: array_typing.ArrayFloat
@@ -41,7 +47,12 @@ class DynamicProfileConditions:
   normalize_to_nbar: bool
   nbar: array_typing.ScalarFloat
   ne_is_fGW: bool
+  ne_bound_left: array_typing.ScalarFloat
+  ne_bound_left_is_grad: bool
+  ne_bound_left_is_fGW: bool
+  ne_bound_left_is_absolute: bool
   ne_bound_right: array_typing.ScalarFloat
+  ne_bound_right_is_grad: bool
   ne_bound_right_is_fGW: bool
   ne_bound_right_is_absolute: bool
   nu: float
@@ -107,8 +118,14 @@ class ProfileConditions(torax_pydantic.BaseModelFrozen):
   vloop_lcfs: torax_pydantic.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(0.0)
   )
+  Ti_bound_left: torax_pydantic.PositiveTimeVaryingScalar | None = None
+  Ti_bound_left_is_grad: bool = True
+  Te_bound_left: torax_pydantic.PositiveTimeVaryingScalar | None = None
+  Te_bound_left_is_grad: bool = True
   Ti_bound_right: torax_pydantic.PositiveTimeVaryingScalar | None = None
+  Ti_bound_right_is_grad: bool = False
   Te_bound_right: torax_pydantic.PositiveTimeVaryingScalar | None = None
+  Te_bound_right_is_grad: bool = False
   Ti: torax_pydantic.PositiveTimeVaryingArray = torax_pydantic.ValidatedDefault(
       {0: {0: 15.0, 1: 1.0}}
   )
@@ -122,7 +139,12 @@ class ProfileConditions(torax_pydantic.BaseModelFrozen):
   normalize_to_nbar: bool = True
   nbar: torax_pydantic.TimeVaryingScalar = torax_pydantic.ValidatedDefault(0.85)
   ne_is_fGW: bool = True
+  ne_bound_left: torax_pydantic.TimeVaryingScalar | None = None
+  ne_bound_left_is_grad: bool = True
+  ne_bound_left_is_fGW: bool = False
+  ne_bound_left_is_absolute: bool = False
   ne_bound_right: torax_pydantic.TimeVaryingScalar | None = None
+  ne_bound_right_is_grad: bool = False
   ne_bound_right_is_fGW: bool = False
   ne_bound_right_is_absolute: bool = False
   set_pedestal: torax_pydantic.TimeVaryingScalar = (
@@ -137,23 +159,35 @@ class ProfileConditions(torax_pydantic.BaseModelFrozen):
 
     def _sanity_check_profile_boundary_conditions(
         values,
+        left_bound,
+        right_bound,
         value_name,
     ):
       """Check that the profile is defined at rho=1.0 for various cases."""
-      error_message = (
-          f'As no right boundary condition was set for {value_name}, the'
-          f' profile for {value_name} must include a rho=1.0 boundary'
+      left_error_message = (
+          f'As no left boundary condition was set for {value_name}, the'
+          f' profile for {value_name} must include a rho_norm=0.0 boundary'
           ' condition.'
       )
-      if not values.right_boundary_conditions_defined:
-        raise ValueError(error_message)
+      right_error_message = (
+          f'As no right boundary condition was set for {value_name}, the'
+          f' profile for {value_name} must include a rho_norm=1.0 boundary'
+          ' condition.'
+      )
+      if left_bound is None and not values.left_boundary_conditions_defined:
+        raise ValueError(left_error_message)
+      if right_bound is None and not values.right_boundary_conditions_defined:
+        raise ValueError(right_error_message)
 
-    if self.Ti_bound_right is None:
-      _sanity_check_profile_boundary_conditions(self.Ti, 'Ti')
-    if self.Te_bound_right is None:
-      _sanity_check_profile_boundary_conditions(self.Te, 'Te')
-    if self.ne_bound_right is None:
-      _sanity_check_profile_boundary_conditions(self.ne, 'ne')
+    _sanity_check_profile_boundary_conditions(
+        self.Ti, self.Ti_bound_left, self.Ti_bound_right, 'Ti',
+    )
+    _sanity_check_profile_boundary_conditions(
+        self.Te, self.Te_bound_left, self.Te_bound_right, 'Te',
+    )
+    _sanity_check_profile_boundary_conditions(
+        self.ne, self.ne_bound_left, self.ne_bound_right, 'ne',
+    )
     return self
 
   def build_dynamic_params(

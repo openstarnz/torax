@@ -374,53 +374,76 @@ def compute_boundary_conditions_for_t_plus_dt(
       profile_conditions_t_plus_dt,
       geo_t_plus_dt,
   )
+  ne_bound_left = ne.left_face_constraint
   ne_bound_right = ne.right_face_constraint
 
-  Zi_edge = charge_states.get_average_charge_state(
+  Zi_inner_edge = charge_states.get_average_charge_state(
+      static_runtime_params_slice.main_ion_names,
+      ion_mixture=dynamic_runtime_params_slice_t_plus_dt.plasma_composition.main_ion,
+      Te=profile_conditions_t_plus_dt.Te_bound_left,
+  )
+  Zimp_inner_edge = charge_states.get_average_charge_state(
+      static_runtime_params_slice.impurity_names,
+      ion_mixture=dynamic_runtime_params_slice_t_plus_dt.plasma_composition.impurity,
+      Te=profile_conditions_t_plus_dt.Te_bound_left,
+  )
+  Zi_outer_edge = charge_states.get_average_charge_state(
       static_runtime_params_slice.main_ion_names,
       ion_mixture=dynamic_runtime_params_slice_t_plus_dt.plasma_composition.main_ion,
       Te=profile_conditions_t_plus_dt.Te_bound_right,
   )
-  Zimp_edge = charge_states.get_average_charge_state(
+  Zimp_outer_edge = charge_states.get_average_charge_state(
       static_runtime_params_slice.impurity_names,
       ion_mixture=dynamic_runtime_params_slice_t_plus_dt.plasma_composition.impurity,
       Te=profile_conditions_t_plus_dt.Te_bound_right,
   )
 
-  dilution_factor_edge = formulas.calculate_main_ion_dilution_factor(
-      Zi_edge,
-      Zimp_edge,
+  dilution_factor_inner_edge = formulas.calculate_main_ion_dilution_factor(
+      Zi_inner_edge,
+      Zimp_inner_edge,
+      dynamic_runtime_params_slice_t_plus_dt.plasma_composition.Zeff_face[0],
+  )
+  dilution_factor_outer_edge = formulas.calculate_main_ion_dilution_factor(
+      Zi_outer_edge,
+      Zimp_outer_edge,
       dynamic_runtime_params_slice_t_plus_dt.plasma_composition.Zeff_face[-1],
   )
 
-  ni_bound_right = ne_bound_right * dilution_factor_edge
-  nimp_bound_right = (ne_bound_right - ni_bound_right * Zi_edge) / Zimp_edge
+  ni_bound_left = ne_bound_left * dilution_factor_inner_edge
+  nimp_bound_left = (ne_bound_left - ni_bound_left * Zi_inner_edge) / Zimp_inner_edge
+  ni_bound_right = ne_bound_right * dilution_factor_outer_edge
+  nimp_bound_right = (ne_bound_right - ni_bound_right * Zi_outer_edge) / Zimp_outer_edge
 
   return {
       'temp_ion': dict(
-          left_face_grad_constraint=jnp.zeros(()),
-          right_face_grad_constraint=None,
+          left_face_constraint=profile_conditions_t_plus_dt.Ti_bound_left,
+          left_face_constraint_is_grad=profile_conditions_t_plus_dt.Ti_bound_left_is_grad,
           right_face_constraint=profile_conditions_t_plus_dt.Ti_bound_right,
+          right_face_constraint_is_grad=profile_conditions_t_plus_dt.Ti_bound_right_is_grad
       ),
       'temp_el': dict(
-          left_face_grad_constraint=jnp.zeros(()),
-          right_face_grad_constraint=None,
+          left_face_constraint=profile_conditions_t_plus_dt.Te_bound_left,
+          left_face_constraint_is_grad=profile_conditions_t_plus_dt.Te_bound_left_is_grad,
           right_face_constraint=profile_conditions_t_plus_dt.Te_bound_right,
+          right_face_constraint_is_grad=profile_conditions_t_plus_dt.Te_bound_right_is_grad,
       ),
       'ne': dict(
-          left_face_grad_constraint=jnp.zeros(()),
-          right_face_grad_constraint=None,
+          left_face_constraint=jnp.array(ne_bound_left),
+          left_face_constraint_is_grad=profile_conditions_t_plus_dt.ne_bound_left_is_grad,
           right_face_constraint=jnp.array(ne_bound_right),
+          right_face_constraint_is_grad=profile_conditions_t_plus_dt.ne_bound_right_is_grad,
       ),
       'ni': dict(
-          left_face_grad_constraint=jnp.zeros(()),
-          right_face_grad_constraint=None,
+          left_face_constraint=jnp.array(ni_bound_left),
+          left_face_constraint_is_grad=profile_conditions_t_plus_dt.ne_bound_left_is_grad,
           right_face_constraint=jnp.array(ni_bound_right),
+          right_face_constraint_is_grad=profile_conditions_t_plus_dt.ne_bound_right_is_grad,
       ),
       'nimp': dict(
-          left_face_grad_constraint=jnp.zeros(()),
-          right_face_grad_constraint=None,
+          left_face_constraint=jnp.array(nimp_bound_left),
+          left_face_constraint_is_grad=profile_conditions_t_plus_dt.ne_bound_left_is_grad,
           right_face_constraint=jnp.array(nimp_bound_right),
+          right_face_constraint_is_grad=profile_conditions_t_plus_dt.ne_bound_right_is_grad,
       ),
       'psi': dict(
           right_face_grad_constraint=(
@@ -443,8 +466,10 @@ def compute_boundary_conditions_for_t_plus_dt(
               else None
           ),
       ),
-      'Zi_edge': Zi_edge,
-      'Zimp_edge': Zimp_edge,
+      'Zi_inner_edge': Zi_inner_edge,
+      'Zimp_inner_edge': Zimp_inner_edge,
+      'Zi_outer_edge': Zi_outer_edge,
+      'Zimp_outer_edge': Zimp_outer_edge,
   }
 
 

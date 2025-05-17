@@ -24,6 +24,8 @@ import chex
 import jax
 from jax import numpy as jnp
 from torax import array_typing
+from typing import Optional
+from torax import jax_utils
 
 
 def _zero() -> array_typing.ScalarFloat:
@@ -51,16 +53,41 @@ class CellVariable:
   """
   value: jax.Array
   dr: array_typing.ScalarFloat
-  left_face_constraint: array_typing.ScalarFloat | None = None
-  right_face_constraint: array_typing.ScalarFloat | None = None
-  left_face_grad_constraint: array_typing.ScalarFloat | None = (
-      dataclasses.field(default_factory=_zero)
-  )
-  right_face_grad_constraint: array_typing.ScalarFloat | None = (
-      dataclasses.field(default_factory=_zero)
-  )
-  # Can't make the above default values be jax zeros because that would be a
-  # call to jax before absl.app.run
+  left_face_constraint: array_typing.ScalarFloat
+  left_face_constraint_is_grad: bool
+  right_face_constraint: array_typing.ScalarFloat
+  right_face_constraint_is_grad: bool
+
+  @classmethod
+  def of(cls, value: jax.Array, dr: jax.Array,
+         left_face_value_constraint: Optional[jax.Array] = None, left_face_grad_constraint: Optional[jax.Array] = None,
+         right_face_value_constraint: Optional[jax.Array] = None, right_face_grad_constraint: Optional[jax.Array] = None,
+  ) -> 'CellVariable':
+    if left_face_value_constraint is None:
+      if left_face_grad_constraint is None:
+        raise ValueError('Exactly one of left_face_value_constraint or left_face_grad_constraint must be specified')
+      left_face_constraint = left_face_grad_constraint
+      left_face_constraint_is_grad = True
+    else:
+      if left_face_grad_constraint is not None:
+        raise ValueError('Exactly one of left_face_value_constraint or left_face_grad_constraint can be specified')
+      left_face_constraint = left_face_value_constraint
+      left_face_constraint_is_grad = False
+
+    if right_face_value_constraint is None:
+      if right_face_grad_constraint is None:
+        raise ValueError('Exactly one of right_face_value_constraint or right_face_grad_constraint must be specified')
+      right_face_constraint = right_face_grad_constraint
+      right_face_constraint_is_grad = True
+    else:
+      if right_face_grad_constraint is not None:
+        raise ValueError('Exactly one of right_face_value_constraint or right_face_grad_constraint can be specified')
+      right_face_constraint = right_face_value_constraint
+      right_face_constraint_is_grad = False
+    return cls(value=value, dr=dr,
+        left_face_constraint=left_face_constraint, left_face_constraint_is_grad=left_face_constraint_is_grad,
+        right_face_constraint=right_face_constraint, right_face_constraint_is_grad=right_face_constraint_is_grad,
+    )
 
   def __post_init__(self):
     """Check that the CellVariable is valid.
@@ -74,6 +101,7 @@ class CellVariable:
     `__post_init__` could in principle make changes.
     """
     # Automatically check dtypes of all numeric fields
+    # TODO: Modify these
     for name, value in self.items():
       if isinstance(value, jax.Array):
         if value.dtype != jnp.float64 and jax.config.read('jax_enable_x64'):
@@ -84,32 +112,6 @@ class CellVariable:
           raise TypeError(
               f'Expected dtype float32, got dtype {value.dtype} for `{name}`'
           )
-    left_and = (
-        self.left_face_constraint is not None
-        and self.left_face_grad_constraint is not None
-    )
-    left_or = (
-        self.left_face_constraint is not None
-        or self.left_face_grad_constraint is not None
-    )
-    if left_and or not left_or:
-      raise ValueError(
-          'Exactly one of left_face_constraint and '
-          'left_face_grad_constraint must be set.'
-      )
-    right_and = (
-        self.right_face_constraint is not None
-        and self.right_face_grad_constraint is not None
-    )
-    right_or = (
-        self.right_face_constraint is not None
-        or self.right_face_grad_constraint is not None
-    )
-    if right_and or not right_or:
-      raise ValueError(
-          'Exactly one of right_face_constraint and '
-          'right_face_grad_constraint must be set.'
-      )
 
   def _assert_unbatched(self):
     if len(self.value.shape) != 1:
@@ -143,39 +145,32 @@ class CellVariable:
       forward_difference = jnp.diff(self.value) / jnp.diff(x)
 
     def constrained_grad(
-        face: jax.Array | None,
-        grad: jax.Array | None,
+        constraint: jax.Array,
+        constraint_is_grad: bool,
         cell: jax.Array,
         right: bool,
     ) -> jax.Array:
       """Calculates the constrained gradient entry for an outer face."""
 
-      if face is not None:
-        if grad is not None:
-          raise ValueError(
-              'Cannot constraint both the value and gradient of '
-              'a face variable.'
-          )
-        if x is None:
-          dx = self.dr
-        else:
-          dx = x[-1] - x[-2] if right else x[1] - x[0]
-        sign = -1 if right else 1
-        return sign * (cell - face) / (0.5 * dx)
+      if x is None:
+        dx = self.dr
       else:
-        if grad is None:
-          raise ValueError('Must specify one of value or gradient.')
-        return grad
+        if right:
+          dx = x[-1] - x[-2]
+        else:
+          dx = x[1] - x[0]
+      unconstrained_grad = (1.0 - 2.0 * right) * (cell - constraint) / (0.5 * dx)
+      return jax.lax.cond(constraint_is_grad, lambda: constraint, lambda: unconstrained_grad)
 
     left_grad = constrained_grad(
         self.left_face_constraint,
-        self.left_face_grad_constraint,
+        self.left_face_constraint_is_grad,
         self.value[0],
         right=False,
     )
     right_grad = constrained_grad(
         self.right_face_constraint,
-        self.right_face_grad_constraint,
+        self.right_face_constraint_is_grad,
         self.value[-1],
         right=True,
     )
@@ -188,25 +183,42 @@ class CellVariable:
     """Calculates values of this variable at faces."""
     self._assert_unbatched()
     inner = (self.value[..., :-1] + self.value[..., 1:]) / 2.0
-    if self.left_face_constraint is not None:
-      left_face = jnp.array([self.left_face_constraint])
-    else:
-      # When there is no constraint, leftmost face equals
-      # leftmost cell
-      left_face = self.value[..., 0:1]
-    if self.right_face_constraint is not None:
-      right_face = jnp.array([self.right_face_constraint])
-    else:
-      # Maintain right_face consistent with right_face_grad_constraint
-      right_face = (
-          self.value[..., -1:] + self.right_face_grad_constraint * self.dr / 2
-      )
+    left_face = jax.lax.cond(
+        self.left_face_constraint_is_grad,
+        lambda: self.value[..., 0:1] - self.left_face_constraint * self.dr / 2,
+        lambda: jnp.array([self.left_face_constraint]),
+    )
+    right_face = jax.lax.cond(
+        self.right_face_constraint_is_grad,
+        lambda: self.value[..., -1:] + self.right_face_constraint * self.dr / 2,
+        lambda: jnp.array([self.right_face_constraint]),
+    )
     return jnp.concatenate([left_face, inner, right_face], axis=-1)
 
   def grad(self) -> jax.Array:
     """Returns the gradient of this variable wrt cell centers."""
     face = self.face_value()
     return jnp.diff(face) / self.dr
+
+  @property
+  def left_face_value_constraint(self):
+    return jax_utils.error_if(self.left_face_constraint, jnp.any(self.left_face_constraint_is_grad),
+                              'left_face_constraint')
+
+  @property
+  def left_face_grad_constraint(self):
+    return jax_utils.error_if(self.left_face_constraint, jnp.logical_not(jnp.any(self.left_face_constraint_is_grad)),
+                              'left_face_constraint')
+
+  @property
+  def right_face_value_constraint(self):
+    return jax_utils.error_if(self.right_face_constraint, jnp.any(self.right_face_constraint_is_grad),
+                              'right_face_constraint')
+
+  @property
+  def right_face_grad_constraint(self):
+    return jax_utils.error_if(self.right_face_constraint, jnp.logical_not(jnp.any(self.right_face_constraint_is_grad)),
+                              'right_face_constraint')
 
   def __str__(self) -> str:
     output_string = f'CellVariable(value={self.value}'
