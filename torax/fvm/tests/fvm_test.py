@@ -46,17 +46,17 @@ class FVMTest(torax_refs.ReferenceValueTest):
     num_faces = num_cells + 1
     right_boundary = jnp.array((1.0, -2.0))
     dr = jnp.array(1.0)
-    x_0 = cell_variable.CellVariable(
+    x_0 = cell_variable.CellVariable.of(
         value=jnp.zeros(num_cells),
         dr=dr,
-        right_face_grad_constraint=None,
-        right_face_constraint=right_boundary[0],
+        left_face_grad_constraint=jnp.array(0.0),
+        right_face_value_constraint=right_boundary[0],
     )
-    x_1 = cell_variable.CellVariable(
+    x_1 = cell_variable.CellVariable.of(
         value=jnp.zeros(num_cells),
         dr=dr,
-        right_face_grad_constraint=None,
-        right_face_constraint=right_boundary[1],
+        left_face_grad_constraint=jnp.array(0.0),
+        right_face_value_constraint=right_boundary[1],
     )
     x = (x_0, x_1)
     # Not deeply investigated, but dt = 1. seems unstable for explicit method.
@@ -146,17 +146,17 @@ class FVMTest(torax_refs.ReferenceValueTest):
     # the solver.
     for start in [0, 1]:
       # Make both x_0 and x_1 start at 0
-      x_0 = cell_variable.CellVariable(
+      x_0 = cell_variable.CellVariable.of(
           value=jnp.zeros(num_cells),
           dr=dx,
-          right_face_grad_constraint=None,
-          right_face_constraint=right_boundary,
+          left_face_grad_constraint=jnp.array(0.0),
+          right_face_value_constraint=right_boundary,
       )
-      x_1 = cell_variable.CellVariable(
+      x_1 = cell_variable.CellVariable.of(
           value=jnp.zeros(num_cells),
           dr=dx,
-          right_face_grad_constraint=None,
-          right_face_constraint=right_boundary,
+          left_face_grad_constraint=jnp.array(0.0),
+          right_face_value_constraint=right_boundary,
       )
       x = (x_0, x_1)
 
@@ -397,11 +397,11 @@ class FVMTest(torax_refs.ReferenceValueTest):
         use_pereverzev=False,
     )
     initial_right_boundary = jnp.array(0.0)
-    x_0 = cell_variable.CellVariable(
+    x_0 = cell_variable.CellVariable.of(
         value=jnp.zeros(num_cells),
         dr=jnp.array(1.0),
-        right_face_grad_constraint=None,
-        right_face_constraint=initial_right_boundary,
+        left_face_grad_constraint=jnp.array(0.0),
+        right_face_value_constraint=initial_right_boundary,
     )
     # Run with different theta_imp values.
     for theta_imp in [0.0, 0.5, 1.0]:
@@ -435,7 +435,7 @@ class FVMTest(torax_refs.ReferenceValueTest):
     np.testing.assert_allclose(x_new[0].value, 0.0)
     # x_new should still have the updated boundary conditions though.
     np.testing.assert_allclose(
-        x_new[0].right_face_constraint, final_right_boundary
+        x_new[0].right_face_value_constraint, final_right_boundary
     )
     # And when theta_imp is > 0, the values should be > 0.
     x_new = implicit_solve_block.implicit_solve_block(
@@ -528,11 +528,11 @@ class FVMTest(torax_refs.ReferenceValueTest):
     )
 
     initial_right_boundary = jnp.array(0.0)
-    x_0 = cell_variable.CellVariable(
+    x_0 = cell_variable.CellVariable.of(
         value=jnp.zeros(num_cells),
         dr=jnp.array(1.0),
-        right_face_grad_constraint=None,
-        right_face_constraint=initial_right_boundary,
+        left_face_grad_constraint=jnp.array(0.0),
+        right_face_value_constraint=initial_right_boundary,
     )
     core_profiles_t_plus_dt = initialization.initial_core_profiles(
         dynamic_runtime_params_slice=dynamic_runtime_params_slice,

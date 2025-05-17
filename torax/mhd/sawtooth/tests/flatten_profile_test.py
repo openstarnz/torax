@@ -39,13 +39,11 @@ class FlattenProfileTest(parameterized.TestCase):
 
   def _create_profile(self, values: chex.Array) -> cell_variable.CellVariable:
     """Helper to create a CellVariable for testing."""
-    return cell_variable.CellVariable(
+    return cell_variable.CellVariable.of(
         value=jnp.array(values),
         dr=self.geo.drho_norm,
         left_face_grad_constraint=jnp.array(0.0),
-        left_face_constraint=None,
-        right_face_grad_constraint=None,
-        right_face_constraint=jnp.array(values[-1]),
+        right_face_value_constraint=jnp.array(values[-1]),
     )
 
   def _get_redistribution_mask(self, rho_norm_mixing: float) -> chex.Array:

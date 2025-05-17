@@ -22,37 +22,40 @@ class CellVariableTest(absltest.TestCase):
 
   def test_unconstrained_left_raises_an_error(self):
     with self.assertRaisesRegex(ValueError, 'left_face_constraint'):
-      cell_variable.CellVariable(
+      cell_variable.CellVariable.of(
           value=jnp.array([1.0, 2.0, 5.0, 3.0]),
           dr=jnp.array(0.1),
-          left_face_constraint=None,
+          left_face_value_constraint=None,
           left_face_grad_constraint=None,
+          right_face_grad_constraint=jnp.array(0.0),
       )
 
   def test_unconstrained_right_raises_an_error(self):
     with self.assertRaisesRegex(ValueError, 'right_face_constraint'):
-      cell_variable.CellVariable(
+      cell_variable.CellVariable.of(
           value=jnp.array([1.0, 2.0, 5.0, 3.0]),
           dr=jnp.array(0.1),
-          right_face_constraint=None,
+          right_face_value_constraint=None,
           right_face_grad_constraint=None,
       )
 
   def test_overconstrained_left_raises_an_error(self):
     with self.assertRaisesRegex(ValueError, 'left_face_constraint'):
-      cell_variable.CellVariable(
+      cell_variable.CellVariable.of(
           value=jnp.array([1.0, 2.0, 5.0, 3.0]),
           dr=jnp.array(0.1),
-          left_face_constraint=jnp.array(1.0),
+          left_face_value_constraint=jnp.array(1.0),
           left_face_grad_constraint=jnp.array(1.0),
+          right_face_grad_constraint=jnp.array(0.0),
       )
 
   def test_overconstrained_right_raises_an_error(self):
     with self.assertRaisesRegex(ValueError, 'right_face_constraint'):
-      cell_variable.CellVariable(
+      cell_variable.CellVariable.of(
           value=jnp.array([1.0, 2.0, 5.0, 3.0]),
           dr=jnp.array(0.1),
-          right_face_constraint=jnp.array(1.0),
+          left_face_grad_constraint=jnp.array(0.0),
+          right_face_value_constraint=jnp.array(1.0),
           right_face_grad_constraint=jnp.array(1.0),
       )
 
@@ -76,7 +79,7 @@ class CellVariableTest(absltest.TestCase):
         grad, jnp.array([0., 1.0 / -3.0, 3.0 / 4.0, -2.0 / -2.0, 0.]))
 
   def test_face_grad_grad_constraint(self):
-    var = cell_variable.CellVariable(
+    var = cell_variable.CellVariable.of(
         value=jnp.array([1.0, 2.0, 5.0, 3.0]),
         dr=jnp.array(0.1),
         left_face_grad_constraint=jnp.array(1.0),
@@ -87,13 +90,11 @@ class CellVariableTest(absltest.TestCase):
 
   def test_face_grad_value_constraint(self):
     dr = 0.1
-    var = cell_variable.CellVariable(
+    var = cell_variable.CellVariable.of(
         value=jnp.array([1.0, 2.0, 5.0, 3.0]),
         dr=jnp.array(dr),
-        left_face_constraint=jnp.array(2.0),
-        left_face_grad_constraint=None,
-        right_face_constraint=jnp.array(5.0),
-        right_face_grad_constraint=None,
+        left_face_value_constraint=jnp.array(2.0),
+        right_face_value_constraint=jnp.array(5.0),
     )
     grad = var.face_grad()
     left_grad = -1 / (0.5 * dr)
@@ -111,13 +112,11 @@ class CellVariableTest(absltest.TestCase):
     np.testing.assert_array_equal(value, jnp.array([1.0, 1.5, 3.5, 4.0, 3.0]))
 
   def test_face_value_value_constrained(self):
-    var = cell_variable.CellVariable(
+    var = cell_variable.CellVariable.of(
         value=jnp.array([1.0, 2.0, 5.0, 3.0]),
         dr=jnp.array(0.1),
-        left_face_constraint=jnp.array(2.0),
-        left_face_grad_constraint=None,
-        right_face_constraint=jnp.array(5.0),
-        right_face_grad_constraint=None,
+        left_face_value_constraint=jnp.array(2.0),
+        right_face_value_constraint=jnp.array(5.0),
     )
     value = var.face_value()
     np.testing.assert_array_equal(value, jnp.array([2.0, 1.5, 3.5, 4.0, 5.0]))
