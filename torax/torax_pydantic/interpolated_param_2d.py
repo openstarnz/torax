@@ -93,6 +93,15 @@ class TimeVaryingArray(model_base.BaseModelFrozen):
   grid: Grid1D | None = None
 
   @functools.cached_property
+  def left_boundary_conditions_defined(self) -> bool:
+    """Checks if the boundary condition at rho=0.0 is always defined."""
+
+    for rho_norm, _ in self.value.values():
+      if 0.0 not in rho_norm:
+        return False
+    return True
+
+  @functools.cached_property
   def right_boundary_conditions_defined(self) -> bool:
     """Checks if the boundary condition at rho=1.0 is always defined."""
 
@@ -104,13 +113,13 @@ class TimeVaryingArray(model_base.BaseModelFrozen):
   def get_value(
       self,
       t: chex.Numeric,
-      grid_type: Literal['cell', 'face', 'face_right'] = 'cell',
+      grid_type: Literal['cell', 'face', 'face_left', 'face_right'] = 'cell',
   ) -> chex.Array:
     """Returns the value of this parameter interpolated at x=time.
 
     Args:
       t: An array of times to interpolate at.
-      grid_type: One of 'cell', 'face', or 'face_right'. For 'face_right', the
+      grid_type: One of 'cell', 'face', 'face_left', or 'face_right'. For 'face_right', the
         element `self.grid_face_centers[-1]` is used as the grid.
 
     Raises:
@@ -124,6 +133,8 @@ class TimeVaryingArray(model_base.BaseModelFrozen):
         return self._get_cached_interpolated_param_cell.get_value(t)
       case 'face':
         return self._get_cached_interpolated_param_face.get_value(t)
+      case 'face_left':
+        return self._get_cached_interpolated_param_face_left.get_value(t)
       case 'face_right':
         return self._get_cached_interpolated_param_face_right.get_value(t)
       case _:
@@ -150,6 +161,7 @@ class TimeVaryingArray(model_base.BaseModelFrozen):
       # A workaround for https://github.com/pydantic/pydantic/issues/10477.
       data.pop('_get_cached_interpolated_param_cell_centers', None)
       data.pop('_get_cached_interpolated_param_face_centers', None)
+      data.pop('_get_cached_interpolated_param_face_left_centers', None)
       data.pop('_get_cached_interpolated_param_face_right_centers', None)
 
       # This is the standard constructor input. No conforming required.
@@ -230,6 +242,20 @@ class TimeVaryingArray(model_base.BaseModelFrozen):
         rho_norm=self.grid.face_centers,
         time_interpolation_mode=self.time_interpolation_mode,
         rho_interpolation_mode=self.rho_interpolation_mode,
+    )
+
+  @functools.cached_property
+  def _get_cached_interpolated_param_face_left(
+      self,
+  ) -> interpolated_param.InterpolatedVarTimeRho:
+    if self.grid is None:
+      raise RuntimeError('grid must be set.')
+
+    return interpolated_param.InterpolatedVarTimeRho(
+      self.value,
+      rho_norm=self.grid.face_centers[0],
+      time_interpolation_mode=self.time_interpolation_mode,
+      rho_interpolation_mode=self.rho_interpolation_mode,
     )
 
   @functools.cached_property
