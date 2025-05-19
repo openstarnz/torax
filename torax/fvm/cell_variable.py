@@ -101,9 +101,8 @@ class CellVariable:
     `__post_init__` could in principle make changes.
     """
     # Automatically check dtypes of all numeric fields
-    # TODO: Modify these
     for name, value in self.items():
-      if isinstance(value, jax.Array):
+      if isinstance(value, jax.Array) and value.dtype != jnp.bool:
         if value.dtype != jnp.float64 and jax.config.read('jax_enable_x64'):
           raise TypeError(
               f'Expected dtype float64, got dtype {value.dtype} for `{name}`'

@@ -82,12 +82,16 @@ def initial_core_profiles(
 
   # The later calculation needs core profiles.
   # So initialize these quantities with zeros.
-  psidot = cell_variable.CellVariable(
+  psidot = cell_variable.CellVariable.of(
       value=jnp.zeros_like(geo.rho),
       dr=geo.drho_norm,
+      left_face_grad_constraint=jnp.array(0.0),
+      right_face_grad_constraint=jnp.array(0.0),
   )
-  psi = cell_variable.CellVariable(
-      value=jnp.zeros_like(geo.rho), dr=geo.drho_norm
+  psi = cell_variable.CellVariable.of(
+      value=jnp.zeros_like(geo.rho), dr=geo.drho_norm,
+      left_face_grad_constraint=jnp.array(0.0),
+      right_face_grad_constraint=jnp.array(0.0),
   )
   q_face = jnp.zeros_like(geo.rho_face)
   s_face = jnp.zeros_like(geo.rho_face)

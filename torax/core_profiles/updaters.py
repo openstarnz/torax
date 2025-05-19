@@ -414,6 +414,20 @@ def compute_boundary_conditions_for_t_plus_dt(
   ni_bound_right = ne_bound_right * dilution_factor_outer_edge
   nimp_bound_right = (ne_bound_right - ni_bound_right * Zi_outer_edge) / Zimp_outer_edge
 
+  if static_runtime_params_slice.use_vloop_lcfs_boundary_condition:
+    psi_right_constraint = _calculate_psi_value_constraint_from_vloop(
+        dt=dt,
+        vloop_lcfs_t=dynamic_runtime_params_slice_t.profile_conditions.vloop_lcfs,
+        vloop_lcfs_t_plus_dt=profile_conditions_t_plus_dt.vloop_lcfs,
+        psi_lcfs_t=core_profiles_t.psi.right_face_constraint,
+        theta=static_runtime_params_slice.stepper.theta_imp,
+    )
+  else:
+    psi_right_constraint = psi_calculations.calculate_psi_grad_constraint_from_Ip_tot(  # pylint: disable=g-long-ternary
+        Ip_tot=profile_conditions_t_plus_dt.Ip_tot,
+        geo=geo_t_plus_dt,
+    )
+
   return {
       'temp_ion': dict(
           left_face_constraint=profile_conditions_t_plus_dt.Ti_bound_left,
@@ -446,25 +460,8 @@ def compute_boundary_conditions_for_t_plus_dt(
           right_face_constraint_is_grad=profile_conditions_t_plus_dt.ne_bound_right_is_grad,
       ),
       'psi': dict(
-          right_face_grad_constraint=(
-              psi_calculations.calculate_psi_grad_constraint_from_Ip_tot(  # pylint: disable=g-long-ternary
-                  Ip_tot=profile_conditions_t_plus_dt.Ip_tot,
-                  geo=geo_t_plus_dt,
-              )
-              if not static_runtime_params_slice.use_vloop_lcfs_boundary_condition
-              else None
-          ),
-          right_face_constraint=(
-              _calculate_psi_value_constraint_from_vloop(  # pylint: disable=g-long-ternary
-                  dt=dt,
-                  vloop_lcfs_t=dynamic_runtime_params_slice_t.profile_conditions.vloop_lcfs,
-                  vloop_lcfs_t_plus_dt=profile_conditions_t_plus_dt.vloop_lcfs,
-                  psi_lcfs_t=core_profiles_t.psi.right_face_constraint,
-                  theta=static_runtime_params_slice.stepper.theta_imp,
-              )
-              if static_runtime_params_slice.use_vloop_lcfs_boundary_condition
-              else None
-          ),
+          right_face_constraint=psi_right_constraint,
+          right_face_constraint_is_grad = not static_runtime_params_slice.use_vloop_lcfs_boundary_condition,
       ),
       'Zi_inner_edge': Zi_inner_edge,
       'Zimp_inner_edge': Zimp_inner_edge,
