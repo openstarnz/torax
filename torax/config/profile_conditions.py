@@ -201,15 +201,34 @@ class ProfileConditions(torax_pydantic.BaseModelFrozen):
         for x in dataclasses.fields(DynamicProfileConditions)
     }
 
+    if self.Te_bound_left is None:
+      dynamic_params['Te_bound_left'] = self.Te.get_value(
+          t, grid_type='face_left'
+      )
+
     if self.Te_bound_right is None:
       dynamic_params['Te_bound_right'] = self.Te.get_value(
           t, grid_type='face_right'
+      )
+
+    if self.Ti_bound_left is None:
+      dynamic_params['Ti_bound_left'] = self.Ti.get_value(
+          t, grid_type='face_left'
       )
 
     if self.Ti_bound_right is None:
       dynamic_params['Ti_bound_right'] = self.Ti.get_value(
           t, grid_type='face_right'
       )
+
+    if self.ne_bound_left is None:
+      dynamic_params['ne_bound_left'] = self.ne.get_value(
+          t, grid_type='face_left'
+      )
+      dynamic_params['ne_bound_left_is_absolute'] = False
+      dynamic_params['ne_bound_left_is_fGW'] = self.ne_is_fGW
+    else:
+      dynamic_params['ne_bound_left_is_absolute'] = True
 
     if self.ne_bound_right is None:
       dynamic_params['ne_bound_right'] = self.ne.get_value(
