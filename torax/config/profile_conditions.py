@@ -17,6 +17,7 @@ import dataclasses
 
 import chex
 import pydantic
+from jax import numpy as jnp
 from torax import array_typing
 from torax.torax_pydantic import torax_pydantic
 from typing_extensions import Self
@@ -202,40 +203,58 @@ class ProfileConditions(torax_pydantic.BaseModelFrozen):
     }
 
     if self.Te_bound_left is None:
-      dynamic_params['Te_bound_left'] = self.Te.get_value(
-          t, grid_type='face_left'
-      )
+      if self.Te_bound_left_is_grad:
+        dynamic_params['Te_bound_left'] = jnp.array(0.0)
+      else:
+        dynamic_params['Te_bound_left'] = self.Te.get_value(
+            t, grid_type='face_left'
+        )
 
     if self.Te_bound_right is None:
-      dynamic_params['Te_bound_right'] = self.Te.get_value(
-          t, grid_type='face_right'
-      )
+      if self.Te_bound_right_is_grad:
+        dynamic_params['Te_bound_right'] = jnp.array(0.0)
+      else:
+        dynamic_params['Te_bound_right'] = self.Te.get_value(
+            t, grid_type='face_right'
+        )
 
     if self.Ti_bound_left is None:
-      dynamic_params['Ti_bound_left'] = self.Ti.get_value(
-          t, grid_type='face_left'
-      )
+      if self.Ti_bound_left_is_grad:
+        dynamic_params['Ti_bound_left'] = jnp.array(0.0)
+      else:
+        dynamic_params['Ti_bound_left'] = self.Ti.get_value(
+            t, grid_type='face_left'
+        )
 
     if self.Ti_bound_right is None:
-      dynamic_params['Ti_bound_right'] = self.Ti.get_value(
-          t, grid_type='face_right'
-      )
+      if self.Ti_bound_right_is_grad:
+        dynamic_params['Ti_bound_right'] = jnp.array(0.0)
+      else:
+        dynamic_params['Ti_bound_right'] = self.Ti.get_value(
+            t, grid_type='face_right'
+        )
 
     if self.ne_bound_left is None:
-      dynamic_params['ne_bound_left'] = self.ne.get_value(
-          t, grid_type='face_left'
-      )
-      dynamic_params['ne_bound_left_is_absolute'] = False
-      dynamic_params['ne_bound_left_is_fGW'] = self.ne_is_fGW
+      if self.ne_bound_left_is_grad:
+        dynamic_params['ne_bound_left'] = jnp.array(0.0)
+      else:
+        dynamic_params['ne_bound_left'] = self.ne.get_value(
+            t, grid_type='face_left'
+        )
+        dynamic_params['ne_bound_left_is_absolute'] = False
+        dynamic_params['ne_bound_left_is_fGW'] = self.ne_is_fGW
     else:
       dynamic_params['ne_bound_left_is_absolute'] = True
 
     if self.ne_bound_right is None:
-      dynamic_params['ne_bound_right'] = self.ne.get_value(
-          t, grid_type='face_right'
-      )
-      dynamic_params['ne_bound_right_is_absolute'] = False
-      dynamic_params['ne_bound_right_is_fGW'] = self.ne_is_fGW
+      if self.ne_bound_right_is_grad:
+        dynamic_params['ne_bound_right'] = jnp.array(0.0)
+      else:
+        dynamic_params['ne_bound_right'] = self.ne.get_value(
+            t, grid_type='face_right'
+        )
+        dynamic_params['ne_bound_right_is_absolute'] = False
+        dynamic_params['ne_bound_right_is_fGW'] = self.ne_is_fGW
     else:
       dynamic_params['ne_bound_right_is_absolute'] = True
 

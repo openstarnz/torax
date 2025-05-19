@@ -60,17 +60,23 @@ class CollisionsTest(parameterized.TestCase):
     core_profiles = mock.create_autospec(
         state.CoreProfiles,
         instance=True,
-        ne=cell_variable.CellVariable(
+        ne=cell_variable.CellVariable.of(
             value=jnp.array(ne),
             dr=jnp.array(1.0),
+            left_face_grad_constraint=jnp.array(0.0),
+            right_face_grad_constraint=jnp.array(0.0),
         ),
-        ni=cell_variable.CellVariable(
+        ni=cell_variable.CellVariable.of(
             value=jnp.array(ni),
             dr=jnp.array(1.0),
+            left_face_grad_constraint=jnp.array(0.0),
+            right_face_grad_constraint=jnp.array(0.0),
         ),
-        nimp=cell_variable.CellVariable(
+        nimp=cell_variable.CellVariable.of(
             value=jnp.array(nimp),
             dr=jnp.array(1.0),
+            left_face_grad_constraint=jnp.array(0.0),
+            right_face_grad_constraint=jnp.array(0.0),
         ),
         Zi=Zi,
         Ai=Ai,

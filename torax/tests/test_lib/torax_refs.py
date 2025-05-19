@@ -313,7 +313,7 @@ def chease_references_Ip_from_chease() -> References:  # pylint: disable=invalid
   ).build_geometry()
   # ground truth values copied from an example PINT execution using
   # array.astype(str),which allows fully lossless reloading
-  psi = fvm.cell_variable.CellVariable(
+  psi = fvm.cell_variable.CellVariable.of(
       value=jnp.array(
           np.array([
               2.82691562998223e-02,
@@ -343,6 +343,7 @@ def chease_references_Ip_from_chease() -> References:  # pylint: disable=invalid
               5.67944467049695e01,
           ]).astype('float64')
       ),
+      left_face_grad_constraint=jnp.array(0.0),
       right_face_grad_constraint=jnp.array(50.417485084359726),
       dr=geo.drho_norm,
   )

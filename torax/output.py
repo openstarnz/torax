@@ -46,8 +46,8 @@ TEMP_ION_RIGHT_BC = "temp_ion_right_bc"
 TEMP_ION_RIGHT_BC_IS_GRAD = "temp_ion_right_bc_is_grad"
 PSI = "psi"
 PSIDOT = "psidot"
-PSI_RIGHT_GRAD_BC = "psi_right_grad_bc"
 PSI_RIGHT_BC = "psi_right_bc"
+PSI_RIGHT_BC_IS_GRAD = "psi_right_bc_is_grad"
 NE = "ne"
 NE_LEFT_BC = "ne_left_bc"
 NE_LEFT_BC_IS_GRAD = "ne_left_bc_is_grad"
@@ -301,10 +301,8 @@ class StateHistory:
         self.core_profiles.temp_ion.right_face_constraint_is_grad
     )
     xr_dict[PSI] = self.core_profiles.psi.value
-    xr_dict[PSI_RIGHT_GRAD_BC] = (
-        self.core_profiles.psi.right_face_grad_constraint
-    )
     xr_dict[PSI_RIGHT_BC] = self.core_profiles.psi.right_face_constraint
+    xr_dict[PSI_RIGHT_BC_IS_GRAD] = self.core_profiles.psi.right_face_constraint_is_grad
     xr_dict[PSIDOT] = self.core_profiles.psidot.value
     xr_dict[NE] = self.core_profiles.ne.value
     xr_dict[NE_LEFT_BC] = self.core_profiles.ne.left_face_constraint

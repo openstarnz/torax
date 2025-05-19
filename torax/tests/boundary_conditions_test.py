@@ -103,8 +103,10 @@ class BoundaryConditionsTest(parameterized.TestCase):
         geo_t_plus_dt=geo,
     )
     # Remove Zi_edge and Zimp_edge which are not used in core_profiles
-    bc.pop('Zi_edge')
-    bc.pop('Zimp_edge')
+    bc.pop('Zi_inner_edge')
+    bc.pop('Zi_outer_edge')
+    bc.pop('Zimp_inner_edge')
+    bc.pop('Zimp_outer_edge')
 
     updated = config_args.recursive_replace(core_profiles, **bc)
 

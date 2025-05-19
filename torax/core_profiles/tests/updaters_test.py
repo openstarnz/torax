@@ -285,15 +285,17 @@ class UpdatersTest(parameterized.TestCase):
     )
     geo = geometry_pydantic_model.CircularConfig(n_rho=4).build_geometry()
 
-    psi_t = cell_variable.CellVariable(
+    psi_t = cell_variable.CellVariable.of(
         value=np.ones_like(geo.rho) * 0.5,
         dr=geo.drho_norm,
-        right_face_grad_constraint=0.0,
+        left_face_grad_constraint=np.array(0.0),
+        right_face_grad_constraint=np.array(0.0),
     )
-    psi_t_plus_dt = cell_variable.CellVariable(
+    psi_t_plus_dt = cell_variable.CellVariable.of(
         value=np.ones_like(geo.rho) * psi_lcfs_t_plus_dt,
         dr=geo.drho_norm,
-        right_face_grad_constraint=0.0,
+        left_face_grad_constraint=np.array(0.0),
+        right_face_grad_constraint=np.array(0.0),
     )
 
     vloop_lcfs_t_plus_dt = updaters._update_vloop_lcfs_from_psi(
