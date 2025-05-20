@@ -45,6 +45,7 @@ class GettersTest(parameterized.TestCase):
         profile_conditions_lib.DynamicProfileConditions,
         instance=True,
         Ti_bound_left=jnp.array(0.0),
+        Ti_bound_left_is_grad=True,
         Ti_bound_right=bound,
         Ti=value,
     )
@@ -62,6 +63,7 @@ class GettersTest(parameterized.TestCase):
         profile_conditions_lib.DynamicProfileConditions,
         instance=True,
         Te_bound_left=jnp.array(0.0),
+        Te_bound_left_is_grad=True,
         Te_bound_right=bound,
         Te=value,
     )
