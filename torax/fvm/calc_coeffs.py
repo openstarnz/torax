@@ -761,4 +761,4 @@ def calc_d(geo: geometry.Geometry, core_profiles: state.CoreProfiles):
   )
   U = geo.vpr_face / core_profiles.psi.face_grad()
   U_grad = jnp.gradient(U, geo.rho_face_norm)
-  return total_pressure_grad / total_pressure * U / U_grad
+  return -total_pressure_grad / total_pressure * U / U_grad
