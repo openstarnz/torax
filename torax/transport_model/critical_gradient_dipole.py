@@ -6,7 +6,19 @@ from torax.pedestal_model import pedestal_model as pedestal_model_lib
 from torax.transport_model import transport_model
 from torax.fvm.calc_coeffs import calc_eta, calc_d, calc_particle_flux, calc_temp_flux
 from torax.constants import CONSTANTS
+from torax.transport_model import runtime_params as runtime_params_lib
 from torax.physics import collisions
+import chex
+
+
+@chex.dataclass(frozen=True)
+class DynamicRuntimeParams(runtime_params_lib.DynamicRuntimeParams):
+  b_n: float
+  c_n: float
+  b_te: float
+  c_te: float
+  b_ti: float
+  c_ti: float
 
 
 class CriticalGradientDipoleModel(transport_model.TransportModel):
@@ -25,13 +37,20 @@ class CriticalGradientDipoleModel(transport_model.TransportModel):
       core_profiles: state.CoreProfiles,
       pedestal_model_outputs: pedestal_model_lib.PedestalModelOutput,
   ) -> state.CoreTransport:
+    assert isinstance(dynamic_runtime_params_slice.transport, DynamicRuntimeParams)
+
     nref = dynamic_runtime_params_slice.numerics.nref
 
     # Classical
     ne_classical_flux, Te_classical_flux, Ti_classical_flux = self._calculate_classical_flux(core_profiles, geo, nref)
+    ne_classical_flux = jnp.nan_to_num(ne_classical_flux, nan=0.0)
+    Te_classical_flux = jnp.nan_to_num(Te_classical_flux, nan=0.0)
+    Ti_classical_flux = jnp.nan_to_num(Ti_classical_flux, nan=0.0)
 
     # Turbulent
-    ne_turbulent_flux, Te_turbulent_flux, Ti_turbulent_flux = self._calculate_turbulent_flux(core_profiles, geo)
+    ne_turbulent_flux, Te_turbulent_flux, Ti_turbulent_flux = self._calculate_turbulent_flux(
+        core_profiles, geo, dynamic_runtime_params_slice.transport
+    )
 
     # Convert proper flux into transport coefficients
     ne_flux = ne_classical_flux + ne_turbulent_flux
@@ -48,15 +67,6 @@ class CriticalGradientDipoleModel(transport_model.TransportModel):
     actual_temp_ion_flux = calc_temp_flux(
       geo, core_profiles.ne, core_profiles.temp_el, coeffs.v_face_el, coeffs.d_face_el, coeffs.chi_face_ion
     ) * nref * CONSTANTS.keV2J
-
-    print('Total expected fluxes:')
-    print('ne flux:', ne_flux)
-    print('Te flux:', temp_el_flux)
-    print('Ti flux:', temp_ion_flux)
-    print('Actual fluxes:')
-    print('ne flux:', actual_ne_flux)
-    print('Te flux:', actual_temp_el_flux)
-    print('Ti flux:', actual_temp_ion_flux)
 
     return coeffs
 
@@ -77,7 +87,6 @@ class CriticalGradientDipoleModel(transport_model.TransportModel):
     ) * nref
 
     coulomb_log = collisions._calculate_lambda_ei(Te / CONSTANTS.keV2J, n)
-    print(coulomb_log)
     prefactor = 12 * jnp.pi**(3/2) / jnp.sqrt(2.0) * CONSTANTS.epsilon0**2 / n / e**4 / coulomb_log
     tau_ee = prefactor * jnp.sqrt(CONSTANTS.me) * Te**(3/2)
     tau_ii = prefactor * jnp.sqrt(CONSTANTS.mp) * Ti**(3/2)
@@ -91,24 +100,20 @@ class CriticalGradientDipoleModel(transport_model.TransportModel):
 
     return el_particle_flux, el_heat_flux, ion_heat_flux
 
-  def _calculate_turbulent_flux(self, core_profiles: state.CoreProfiles, geo: geometry.Geometry):
+  def _calculate_turbulent_flux(self, core_profiles: state.CoreProfiles, geo: geometry.Geometry, transport: DynamicRuntimeParams):
     eta_el = calc_eta(core_profiles.temp_el, core_profiles.ne)
+    eta_el = jnp.nan_to_num(eta_el, nan=eta_el[1])
     eta_ion = calc_eta(core_profiles.temp_ion, core_profiles.ni)
+    eta_ion = jnp.nan_to_num(eta_ion, nan=eta_ion[1])
     d = calc_d(geo, core_profiles)
+    d = jnp.nan_to_num(d, nan=d[2])
 
     delta_eta_el, delta_d_el = self._calc_deltas(eta_el, d)
     delta_eta_ion, delta_d_ion = self._calc_deltas(eta_ion, d)
 
-    b_ne = 1.0
-    c_ne = 1.0
-    b_Te = 1.0
-    c_Te = 1.0
-    b_Ti = 1.0
-    c_Ti = 1.0
-
-    ne_turbulent_flux = self._critical_model(delta_d_el, delta_eta_el, b_ne, c_ne, eta_el, True)
-    Te_turbulent_flux = self._critical_model(delta_d_el, delta_eta_el, b_Te, c_Te, eta_el, False)
-    Ti_turbulent_flux = self._critical_model(delta_d_ion, delta_eta_ion, b_Ti, c_Ti, eta_ion, False)
+    ne_turbulent_flux = self._critical_model(delta_d_el, delta_eta_el, transport.b_n, transport.c_n, eta_el, True)
+    Te_turbulent_flux = self._critical_model(delta_d_el, delta_eta_el, transport.b_te, transport.c_te, eta_el, False)
+    Ti_turbulent_flux = self._critical_model(delta_d_ion, delta_eta_ion, transport.b_ti, transport.c_ti, eta_ion, False)
 
     return ne_turbulent_flux, Te_turbulent_flux, Ti_turbulent_flux
 
@@ -154,6 +159,9 @@ class CriticalGradientDipoleModel(transport_model.TransportModel):
     d_face_el = -ne_flux / nref / core_profiles.ne.face_grad() / geo.g1_over_vpr_face
     chi_face_el = -Te_flux / nref / CONSTANTS.keV2J / core_profiles.temp_el.face_grad() / core_profiles.ne.face_value() / geo.g1_over_vpr_face
     chi_face_ion = -Ti_flux / nref / CONSTANTS.keV2J / core_profiles.temp_ion.face_grad() / core_profiles.ne.face_value() / geo.g1_over_vpr_face
+    d_face_el = jnp.nan_to_num(d_face_el, nan=0.0)
+    chi_face_el = jnp.nan_to_num(chi_face_el, nan=0.0)
+    chi_face_ion = jnp.nan_to_num(chi_face_ion, nan=0.0)
     return state.CoreTransport(
         chi_face_ion=chi_face_ion,
         chi_face_el=chi_face_el,

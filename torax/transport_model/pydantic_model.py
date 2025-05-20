@@ -29,6 +29,7 @@ from torax.transport_model import critical_gradient
 from torax.transport_model import pydantic_model_base
 from torax.transport_model import qlknn_10d
 from torax.transport_model import qlknn_transport_model
+from torax.transport_model import critical_gradient_dipole
 
 
 # Environment variable for the QLKNN model. Used if the model path
@@ -236,6 +237,31 @@ class CriticalGradientTransportModel(pydantic_model_base.TransportBase):
     )
 
 
+class CriticalGradientDipoleTransportModel(pydantic_model_base.TransportBase):
+  transport_model: Literal['cgm-dipole'] = 'cgm-dipole'
+  b_n: float = 0.0
+  c_n: float = 1.0
+  b_te: float = 0.0
+  c_te: float = 1.0
+  b_ti: float = 0.0
+  c_ti: float = 1.0
+
+  def build_transport_model(self) -> critical_gradient_dipole.CriticalGradientDipoleModel:
+    return critical_gradient_dipole.CriticalGradientDipoleModel()
+
+  def build_dynamic_params(self, t: chex.Numeric) -> critical_gradient_dipole.DynamicRuntimeParams:
+    base_kwargs = dataclasses.asdict(super().build_dynamic_params(t))
+    return critical_gradient_dipole.DynamicRuntimeParams(
+        b_n=self.b_n,
+        c_n=self.c_n,
+        b_te=self.b_te,
+        c_te=self.c_te,
+        b_ti=self.b_ti,
+        c_ti=self.c_ti,
+        **base_kwargs,
+    )
+
+
 class BohmGyroBohmTransportModel(pydantic_model_base.TransportBase):
   """Model for the Bohm + Gyro-Bohm transport model.
 
@@ -326,6 +352,7 @@ try:
       QLKNNTransportModel,
       ConstantTransportModel,
       CriticalGradientTransportModel,
+      CriticalGradientDipoleTransportModel,
       BohmGyroBohmTransportModel,
       qualikiz_transport_model.QualikizTransportModelConfig,
   ]
@@ -334,5 +361,6 @@ except ImportError:
       QLKNNTransportModel,
       ConstantTransportModel,
       CriticalGradientTransportModel,
+      CriticalGradientDipoleTransportModel,
       BohmGyroBohmTransportModel,
   ]
