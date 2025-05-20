@@ -47,6 +47,7 @@ class GettersTest(parameterized.TestCase):
         Ti_bound_left=jnp.array(0.0),
         Ti_bound_left_is_grad=True,
         Ti_bound_right=bound,
+        Ti_bound_right_is_grad=False,
         Ti=value,
     )
     result = getters.get_updated_ion_temperature(
@@ -65,6 +66,7 @@ class GettersTest(parameterized.TestCase):
         Te_bound_left=jnp.array(0.0),
         Te_bound_left_is_grad=True,
         Te_bound_right=bound,
+        Te_bound_right_is_grad=False,
         Te=value,
     )
     result = getters.get_updated_electron_temperature(
