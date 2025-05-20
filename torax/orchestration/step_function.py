@@ -659,14 +659,16 @@ def _provide_core_profiles_t_plus_dt(
   # is evolving and updated_prescribed_core_profiles is a no-op.
   Zi_face = jnp.concatenate(
       [
-          updated_values['Zi_face'][:-1],
-          jnp.array([updated_boundary_conditions['Zi_edge']]),
+          jnp.array([updated_boundary_conditions['Zi_inner_edge']]),
+          updated_values['Zi_face'][1:-1],
+          jnp.array([updated_boundary_conditions['Zi_outer_edge']]),
       ],
   )
   Zimp_face = jnp.concatenate(
       [
+          jnp.array([updated_boundary_conditions['Zimp_inner_edge']]),
           updated_values['Zimp_face'][:-1],
-          jnp.array([updated_boundary_conditions['Zimp_edge']]),
+          jnp.array([updated_boundary_conditions['Zimp_outer_edge']]),
       ],
   )
   # pylint: enable=invalid-name

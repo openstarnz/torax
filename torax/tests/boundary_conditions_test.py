@@ -103,8 +103,10 @@ class BoundaryConditionsTest(parameterized.TestCase):
         geo_t_plus_dt=geo,
     )
     # Remove Zi_edge and Zimp_edge which are not used in core_profiles
-    bc.pop('Zi_edge')
-    bc.pop('Zimp_edge')
+    bc.pop('Zi_inner_edge')
+    bc.pop('Zi_outer_edge')
+    bc.pop('Zimp_inner_edge')
+    bc.pop('Zimp_outer_edge')
 
     updated = config_args.recursive_replace(core_profiles, **bc)
 
@@ -125,21 +127,21 @@ class BoundaryConditionsTest(parameterized.TestCase):
     expected_nimp_bound_right = (
         expected_ne_bound_right - expected_ni_bound_right * Zi_face[-1]
     ) / Zimp_face[-1]
-    np.testing.assert_allclose(updated.temp_ion.right_face_constraint, 27.7)
-    np.testing.assert_allclose(updated.temp_el.right_face_constraint, 21.05)
+    np.testing.assert_allclose(updated.temp_ion.right_face_value_constraint, 27.7)
+    np.testing.assert_allclose(updated.temp_el.right_face_value_constraint, 21.05)
     np.testing.assert_allclose(
-        updated.ne.right_face_constraint,
+        updated.ne.right_face_value_constraint,
         expected_ne_bound_right,
         atol=1e-6,
         rtol=1e-6,
     )
     np.testing.assert_allclose(
-        updated.ni.right_face_constraint, expected_ni_bound_right
+        updated.ni.right_face_value_constraint, expected_ni_bound_right
     )
     np.testing.assert_allclose(
-        updated.nimp.right_face_constraint, expected_nimp_bound_right
+        updated.nimp.right_face_value_constraint, expected_nimp_bound_right
     )
-    np.testing.assert_allclose(updated.temp_el.right_face_constraint, 21.05)
+    np.testing.assert_allclose(updated.temp_el.right_face_value_constraint, 21.05)
     np.testing.assert_allclose(
         updated.psi.right_face_grad_constraint, psi_constraint
     )

@@ -37,14 +37,15 @@ def get_updated_ion_temperature(
     geo: geometry.Geometry,
 ) -> cell_variable.CellVariable:
   """Gets initial and/or prescribed ion temperature profiles."""
-  temp_ion = cell_variable.CellVariable(
-      value=dynamic_profile_conditions.Ti,
-      left_face_grad_constraint=jnp.zeros(()),
-      right_face_grad_constraint=None,
-      right_face_constraint=dynamic_profile_conditions.Ti_bound_right,
-      dr=geo.drho_norm,
+  return _updated_temperature(
+      geo.drho_norm,
+      dynamic_profile_conditions.Ti,
+      dynamic_profile_conditions.Ti_bound_left,
+      dynamic_profile_conditions.Ti_bound_left_is_grad,
+      dynamic_profile_conditions.Ti_bound_right,
+      dynamic_profile_conditions.Ti_bound_right_is_grad,
+      'Ti',
   )
-  return temp_ion
 
 
 def get_updated_electron_temperature(
@@ -52,14 +53,45 @@ def get_updated_electron_temperature(
     geo: geometry.Geometry,
 ) -> cell_variable.CellVariable:
   """Gets initial and/or prescribed electron temperature profiles."""
-  temp_el = cell_variable.CellVariable(
-      value=dynamic_profile_conditions.Te,
-      left_face_grad_constraint=jnp.zeros(()),
-      right_face_grad_constraint=None,
-      right_face_constraint=dynamic_profile_conditions.Te_bound_right,
-      dr=geo.drho_norm,
+  return _updated_temperature(
+    geo.drho_norm,
+    dynamic_profile_conditions.Te,
+    dynamic_profile_conditions.Te_bound_left,
+    dynamic_profile_conditions.Te_bound_left_is_grad,
+    dynamic_profile_conditions.Te_bound_right,
+    dynamic_profile_conditions.Te_bound_right_is_grad,
+    'Te',
   )
-  return temp_el
+
+
+def _updated_temperature(
+    drho_norm: array_typing.ScalarFloat,
+    value: array_typing.ArrayFloat,
+    bound_left: array_typing.ScalarFloat,
+    bound_left_is_grad: bool,
+    bound_right: array_typing.ScalarFloat,
+    bound_right_is_grad: bool,
+    name: str,
+) -> cell_variable.CellVariable:
+  """Helper method for getting updated temperature profiles."""
+  left_constraint = _ensure_value_boundary_is_positive(bound_left, bound_left_is_grad, name)
+  right_constraint = _ensure_value_boundary_is_positive(bound_right, bound_right_is_grad, name)
+  return cell_variable.CellVariable(
+      value=value,
+      dr=drho_norm,
+      left_face_constraint=left_constraint,
+      left_face_constraint_is_grad=bound_left_is_grad,
+      right_face_constraint=right_constraint,
+      right_face_constraint_is_grad=bound_right_is_grad,
+  )
+
+
+def _ensure_value_boundary_is_positive(bound: jax.Array, bound_is_grad: bool, name: str) -> jax.Array:
+  return jax_utils.error_if(
+      bound,
+      (jnp.min(bound) <= 0) & (~bound_is_grad),
+      name,
+  )
 
 
 def get_updated_electron_density(
@@ -80,7 +112,11 @@ def get_updated_electron_density(
       dynamic_profile_conditions.ne * nGW,
       dynamic_profile_conditions.ne,
   )
-  # Calculate ne_bound_right.
+  ne_bound_left = jnp.where(
+      dynamic_profile_conditions.ne_bound_left_is_fGW,
+      dynamic_profile_conditions.ne_bound_left * nGW,
+      dynamic_profile_conditions.ne_bound_left,
+  )
   ne_bound_right = jnp.where(
       dynamic_profile_conditions.ne_bound_right_is_fGW,
       dynamic_profile_conditions.ne_bound_right * nGW,
@@ -88,8 +124,8 @@ def get_updated_electron_density(
   )
 
   if dynamic_profile_conditions.normalize_to_nbar:
-    face_left = ne_value[0]  # Zero gradient boundary condition at left face.
-    face_right = ne_bound_right
+    face_left = jnp.where(dynamic_profile_conditions.ne_bound_left_is_grad, ne_value[0], ne_bound_left)
+    face_right = jnp.where(dynamic_profile_conditions.ne_bound_right_is_grad, ne_value[-1], ne_bound_right)
     face_inner = (ne_value[..., :-1] + ne_value[..., 1:]) / 2.0
     ne_face = jnp.concatenate(
         [face_left[None], face_inner, face_right[None]],
@@ -109,32 +145,64 @@ def get_updated_electron_density(
         dynamic_profile_conditions.nbar * nGW,
         dynamic_profile_conditions.nbar,
     )
-    if not dynamic_profile_conditions.ne_bound_right_is_absolute:
-      # In this case, ne_bound_right is taken from ne and we also normalize it.
-      C = target_nbar / (_trapz(ne_face, geo.Rout_face) / Rmin_out)
-      ne_bound_right = C * ne_bound_right
-    else:
-      # If ne_bound_right is absolute, subtract off contribution from outer
-      # face to get C we need to multiply the inner values with.
-      nbar_from_ne_face_inner = (
-          _trapz(ne_face[:-1], geo.Rout_face[:-1]) / Rmin_out
-      )
 
-      dr_edge = geo.Rout_face[-1] - geo.Rout_face[-2]
+    left_is_absolute = dynamic_profile_conditions.ne_bound_left_is_absolute
+    right_is_absolute = dynamic_profile_conditions.ne_bound_right_is_absolute
 
-      C = (target_nbar - 0.5 * ne_face[-1] * dr_edge / Rmin_out) / (
-          nbar_from_ne_face_inner + 0.5 * ne_face[-2] * dr_edge / Rmin_out
-      )
+    start_idx = 1 if left_is_absolute else 0
+    end_idx = -1 if right_is_absolute else None
+
+    inner_nbar = _trapz(ne_face[start_idx:end_idx], geo.Rout_face[start_idx:end_idx]) / Rmin_out
+
+    numerator_change = 0
+    denominator_change = 0
+
+    if left_is_absolute:
+      numerator_change += ne_face[0] * (geo.Rout_face[1] - geo.Rout_face[0])
+      denominator_change += ne_face[1] * (geo.Rout_face[1] - geo.Rout_face[0])
+    if right_is_absolute:
+      numerator_change += ne_face[-1] * (geo.Rout_face[-1] - geo.Rout_face[-2])
+      denominator_change += ne_face[-2] * (geo.Rout_face[-1] - geo.Rout_face[-2])
+
+    C = ((target_nbar- 0.5 * numerator_change / Rmin_out) /
+         (inner_nbar + 0.5 * denominator_change / Rmin_out))
+
+    if not left_is_absolute:
+      ne_bound_left *= C
+    if not right_is_absolute:
+      ne_bound_right *= C
   else:
     C = 1
 
   ne_value = C * ne_value
 
+  # TODO: Add tests to check that the left and right boundaries are correct in the new cases.
+
+  if dynamic_profile_conditions.normalize_to_nbar:
+    # Verify that the line integrated value is correct
+    face_left = jnp.where(dynamic_profile_conditions.ne_bound_left_is_grad, ne_value[0], ne_bound_left)
+    face_right = jnp.where(dynamic_profile_conditions.ne_bound_right_is_grad, ne_value[-1], ne_bound_right)
+    face_inner = (ne_value[..., :-1] + ne_value[..., 1:]) / 2.0
+    ne_face = jnp.concatenate(
+        [face_left[None], face_inner, face_right[None]],
+    )
+    Rmin_out = geo.Rout_face[-1] - geo.Rout_face[0]
+    actual_nbar = _trapz(ne_face, geo.Rout_face) / Rmin_out
+    target_nbar = jnp.where(
+      dynamic_profile_conditions.ne_is_fGW,
+      dynamic_profile_conditions.nbar * nGW,
+      dynamic_profile_conditions.nbar,
+    )
+    diff = actual_nbar - target_nbar
+    ne_value = jax_utils.error_if(ne_value, diff > 1e-6, 'nbar mismatch')
+
   ne = cell_variable.CellVariable(
       value=ne_value,
       dr=geo.drho_norm,
-      right_face_grad_constraint=None,
+      left_face_constraint=ne_bound_left,
+      left_face_constraint_is_grad=dynamic_profile_conditions.ne_bound_left_is_grad,
       right_face_constraint=ne_bound_right,
+      right_face_constraint_is_grad=dynamic_profile_conditions.ne_bound_right_is_grad,
   )
   return ne
 
@@ -195,25 +263,35 @@ def get_ion_density_and_charge_states(
   Zeff_face = dynamic_runtime_params_slice.plasma_composition.Zeff_face
 
   dilution_factor = formulas.calculate_main_ion_dilution_factor(Zi, Zimp, Zeff)
-  dilution_factor_edge = formulas.calculate_main_ion_dilution_factor(
+  dilution_factor_inner_edge = formulas.calculate_main_ion_dilution_factor(
+      Zi_face[0], Zimp_face[0], Zeff_face[0]
+  )
+  dilution_factor_outer_edge = formulas.calculate_main_ion_dilution_factor(
       Zi_face[-1], Zimp_face[-1], Zeff_face[-1]
   )
 
+  # Assume that Zeff varies slowly across the plasma, so that the gradient of
+  # ni and nimp are simply proportional to the gradient of ne
   ni = cell_variable.CellVariable(
       value=ne.value * dilution_factor,
       dr=geo.drho_norm,
-      right_face_grad_constraint=None,
-      right_face_constraint=ne.right_face_constraint * dilution_factor_edge,
+      left_face_constraint=ne.left_face_constraint * dilution_factor_inner_edge,
+      left_face_constraint_is_grad=ne.left_face_constraint_is_grad,
+      right_face_constraint=ne.right_face_constraint * dilution_factor_outer_edge,
+      right_face_constraint_is_grad=ne.right_face_constraint_is_grad,
   )
 
   nimp = cell_variable.CellVariable(
       value=(ne.value - ni.value * Zi) / Zimp,
       dr=geo.drho_norm,
-      right_face_grad_constraint=None,
+      left_face_constraint=(
+          ne.left_face_constraint - ni.left_face_constraint * dilution_factor_inner_edge
+      ) / Zimp_face[0],
+      left_face_constraint_is_grad=ne.left_face_constraint_is_grad,
       right_face_constraint=(
           ne.right_face_constraint - ni.right_face_constraint * Zi_face[-1]
-      )
-      / Zimp_face[-1],
+      ) / Zimp_face[-1],
+      right_face_constraint_is_grad=ne.right_face_constraint_is_grad,
   )
   return ni, nimp, Zi, Zi_face, Zimp, Zimp_face
 

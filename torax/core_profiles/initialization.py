@@ -82,12 +82,16 @@ def initial_core_profiles(
 
   # The later calculation needs core profiles.
   # So initialize these quantities with zeros.
-  psidot = cell_variable.CellVariable(
+  psidot = cell_variable.CellVariable.of(
       value=jnp.zeros_like(geo.rho),
       dr=geo.drho_norm,
+      left_face_grad_constraint=jnp.array(0.0),
+      right_face_grad_constraint=jnp.array(0.0),
   )
-  psi = cell_variable.CellVariable(
-      value=jnp.zeros_like(geo.rho), dr=geo.drho_norm
+  psi = cell_variable.CellVariable.of(
+      value=jnp.zeros_like(geo.rho), dr=geo.drho_norm,
+      left_face_grad_constraint=jnp.array(0.0),
+      right_face_grad_constraint=jnp.array(0.0),
   )
   q_face = jnp.zeros_like(geo.rho_face)
   s_face = jnp.zeros_like(geo.rho_face)
@@ -296,19 +300,20 @@ def update_psi_from_j(
     # For the first timestep, we need an initial value for psi at the LCFS, so
     # we set it to match the desired plasma current.
     right_face_grad_constraint = None
-    right_face_constraint = (
+    right_face_value_constraint = (
         psi_value[-1] + dpsi_drhonorm_edge * geo.drho_norm / 2
     )
   else:
     # Use the dpsi/drho calculated above as the right face gradient constraint
     right_face_grad_constraint = dpsi_drhonorm_edge
-    right_face_constraint = None
+    right_face_value_constraint = None
 
-  psi = cell_variable.CellVariable(
+  psi = cell_variable.CellVariable.of(
       value=psi_value,
       dr=geo.drho_norm,
+      left_face_grad_constraint=jnp.array(0.0),
       right_face_grad_constraint=right_face_grad_constraint,
-      right_face_constraint=right_face_constraint,
+      right_face_value_constraint=right_face_value_constraint,
   )
 
   return psi
@@ -341,6 +346,7 @@ def _init_psi_psidot_and_currents(
   Returns:
     Refined core profiles.
   """
+  # TODO: Calculate psi on the inner and outer sides
   use_vloop_bc = static_runtime_params_slice.use_vloop_lcfs_boundary_condition
 
   source_profiles = source_profiles_lib.SourceProfiles(
@@ -375,19 +381,20 @@ def _init_psi_psidot_and_currents(
       # Extrapolate the value of psi at the LCFS from the dpsi/drho constraint
       # to achieve the desired Ip_tot
       right_face_grad_constraint = None
-      right_face_constraint = (
+      right_face_value_constraint = (
           dynamic_runtime_params_slice.profile_conditions.psi[-1]
           + dpsi_drhonorm_edge * geo.drho_norm / 2
       )
     else:
       # Use the dpsi/drho calculated above as the right face gradient constraint
       right_face_grad_constraint = dpsi_drhonorm_edge
-      right_face_constraint = None
+      right_face_value_constraint = None
 
-    psi = cell_variable.CellVariable(
+    psi = cell_variable.CellVariable.of(
         value=dynamic_runtime_params_slice.profile_conditions.psi,
+        left_face_grad_constraint=jnp.array(0.0),
         right_face_grad_constraint=right_face_grad_constraint,
-        right_face_constraint=right_face_constraint,
+        right_face_value_constraint=right_face_value_constraint,
         dr=geo.drho_norm,
     )
 
@@ -432,10 +439,11 @@ def _init_psi_psidot_and_currents(
     # Use the psi from the equilibrium as the right face constraint
     # This has already been made consistent with the desired Ip_tot
     # by make_ip_consistent
-    psi = cell_variable.CellVariable(
+    psi = cell_variable.CellVariable.of(
         value=geo.psi_from_Ip,  # Use psi from equilibrium
+        left_face_grad_constraint=jnp.array(0.0),
         right_face_grad_constraint=None if use_vloop_bc else dpsi_drhonorm_edge,
-        right_face_constraint=geo.psi_from_Ip_face[-1]
+        right_face_value_constraint=geo.psi_from_Ip_face[-1]
         if use_vloop_bc
         else None,
         dr=geo.drho_norm,

@@ -42,11 +42,11 @@ def make_zero_core_profiles(
     geo: geometry.Geometry,
 ) -> state.CoreProfiles:
   """Returns a dummy CoreProfiles object."""
-  zero_cell_variable = cell_variable.CellVariable(
+  zero_cell_variable = cell_variable.CellVariable.of(
       value=jnp.zeros_like(geo.rho),
       dr=geo.drho_norm,
-      right_face_constraint=jnp.ones(()),
-      right_face_grad_constraint=None,
+      left_face_grad_constraint=jnp.zeros(()),
+      right_face_value_constraint=jnp.ones(()),
   )
   return state.CoreProfiles(
       currents=state.Currents.zeros(geo),
@@ -120,12 +120,6 @@ class StateTest(torax_refs.ReferenceValueTest):
             geo
         ),
         qei=source_profiles_lib.QeiInfo.zeros(geo),
-    )
-    dummy_cell_variable = cell_variable.CellVariable(
-        value=jnp.zeros_like(geo.rho),
-        dr=geo.drho_norm,
-        right_face_constraint=jnp.ones(()),
-        right_face_grad_constraint=None,
     )
     core_profiles = make_zero_core_profiles(geo)
     sim_state = state.ToraxSimState(
@@ -239,12 +233,12 @@ class InitialStatesTest(parameterized.TestCase):
         source_models=source_models,
     )
     np.testing.assert_allclose(
-        core_profiles.temp_ion.right_face_constraint, 27.7
+        core_profiles.temp_ion.right_face_value_constraint, 27.7
     )
     np.testing.assert_allclose(
-        core_profiles.temp_el.right_face_constraint, 42.0
+        core_profiles.temp_el.right_face_value_constraint, 42.0
     )
-    np.testing.assert_allclose(core_profiles.ne.right_face_constraint, 0.1)
+    np.testing.assert_allclose(core_profiles.ne.right_face_value_constraint, 0.1)
 
   def test_core_profiles_quasineutrality_check(self):
     """Tests core_profiles quasineutrality check on initial state."""

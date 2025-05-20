@@ -59,20 +59,35 @@ class BootstrapCurrentSourceTest(absltest.TestCase):
     )
     self.core_profiles = mock.create_autospec(
         state.CoreProfiles,
-        temp_ion=cell_variable.CellVariable(
-            value=jnp.linspace(400, 700, n_rho), dr=self.geo.drho_norm
+        temp_ion=cell_variable.CellVariable.of(
+            value=jnp.linspace(400, 700, n_rho),
+            dr=self.geo.drho_norm,
+            left_face_grad_constraint=jnp.array(0.0),
+            right_face_grad_constraint=jnp.array(0.0),
         ),
-        temp_el=cell_variable.CellVariable(
-            value=jnp.linspace(4000, 7000, n_rho), dr=self.geo.drho_norm
+        temp_el=cell_variable.CellVariable.of(
+            value=jnp.linspace(4000, 7000, n_rho),
+            dr=self.geo.drho_norm,
+            left_face_grad_constraint=jnp.array(0.0),
+            right_face_grad_constraint=jnp.array(0.0),
         ),
-        psi=cell_variable.CellVariable(
-            value=jnp.linspace(9000, 4000, n_rho), dr=self.geo.drho_norm
+        psi=cell_variable.CellVariable.of(
+            value=jnp.linspace(9000, 4000, n_rho),
+            dr=self.geo.drho_norm,
+            left_face_grad_constraint=jnp.array(0.0),
+            right_face_grad_constraint=jnp.array(0.0),
         ),
-        ne=cell_variable.CellVariable(
-            value=jnp.linspace(100, 200, n_rho), dr=self.geo.drho_norm
+        ne=cell_variable.CellVariable.of(
+            value=jnp.linspace(100, 200, n_rho),
+            dr=self.geo.drho_norm,
+            left_face_grad_constraint=jnp.array(0.0),
+            right_face_grad_constraint=jnp.array(0.0),
         ),
-        ni=cell_variable.CellVariable(
-            value=jnp.linspace(100, 200, n_rho), dr=self.geo.drho_norm
+        ni=cell_variable.CellVariable.of(
+            value=jnp.linspace(100, 200, n_rho),
+            dr=self.geo.drho_norm,
+            left_face_grad_constraint=jnp.array(0.0),
+            right_face_grad_constraint=jnp.array(0.0),
         ),
         Zi_face=np.linspace(1000, 2000, n_rho + 1),
         q_face=np.linspace(1, 5, n_rho + 1),

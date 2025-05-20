@@ -44,7 +44,10 @@ class GettersTest(parameterized.TestCase):
     profile_conditions = mock.create_autospec(
         profile_conditions_lib.DynamicProfileConditions,
         instance=True,
+        Ti_bound_left=jnp.array(0.0),
+        Ti_bound_left_is_grad=True,
         Ti_bound_right=bound,
+        Ti_bound_right_is_grad=False,
         Ti=value,
     )
     result = getters.get_updated_ion_temperature(
@@ -52,7 +55,7 @@ class GettersTest(parameterized.TestCase):
         self.geo,
     )
     np.testing.assert_allclose(result.value, value)
-    np.testing.assert_equal(result.right_face_constraint, bound)
+    np.testing.assert_equal(result.right_face_value_constraint, bound)
 
   def test_updated_electron_temperature(self):
     bound = np.array(42.0)
@@ -60,7 +63,10 @@ class GettersTest(parameterized.TestCase):
     profile_conditions = mock.create_autospec(
         profile_conditions_lib.DynamicProfileConditions,
         instance=True,
+        Te_bound_left=jnp.array(0.0),
+        Te_bound_left_is_grad=True,
         Te_bound_right=bound,
+        Te_bound_right_is_grad=False,
         Te=value,
     )
     result = getters.get_updated_electron_temperature(
@@ -68,7 +74,7 @@ class GettersTest(parameterized.TestCase):
         self.geo,
     )
     np.testing.assert_allclose(result.value, value)
-    np.testing.assert_equal(result.right_face_constraint, bound)
+    np.testing.assert_equal(result.right_face_value_constraint, bound)
 
   def test_ne_core_profile_setter(self):
     """Tests that setting ne works."""
@@ -131,7 +137,7 @@ class GettersTest(parameterized.TestCase):
         self.geo,
     )
     np.testing.assert_allclose(
-        ne.right_face_constraint,
+        ne.right_face_value_constraint,
         expected_value,
         atol=1e-6,
         rtol=1e-6,
@@ -237,12 +243,11 @@ class GettersTest(parameterized.TestCase):
     dynamic_runtime_params_slice = provider(t=1.0)
     geo = torax_config.geometry.build_provider(t=1.0)
 
-    temp_el = cell_variable.CellVariable(
+    temp_el = cell_variable.CellVariable.of(
         value=jnp.ones_like(geo.rho_norm)
         * 100.0,  # ensure full ionization
         left_face_grad_constraint=jnp.zeros(()),
-        right_face_grad_constraint=None,
-        right_face_constraint=jnp.array(100.0, dtype=jax_utils.get_dtype()),
+        right_face_value_constraint=jnp.array(100.0, dtype=jax_utils.get_dtype()),
         dr=geo.drho_norm,
     )
     ne = getters.get_updated_electron_density(
