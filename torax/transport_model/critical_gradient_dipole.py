@@ -152,12 +152,12 @@ class CriticalGradientDipoleModel(transport_model.TransportModel):
     return jnp.abs(best_x-x), jnp.abs(best_y-y)
 
   def _critical_model(self, delta_d, delta_eta, b, c, eta, is_particle):
-    is_particle = 1.0 if is_particle else -1.0
+    is_particle = -1.0 if is_particle else 1.0
     return b * (delta_d**2 + delta_eta**2) ** (c/2) * jnp.sign(eta - 2/3) * is_particle
 
   def _convert_flux_to_coeffs(self, ne_flux, Te_flux, Ti_flux, nref, core_profiles: state.CoreProfiles, geo: geometry.Geometry) -> state.CoreTransport:
-    d_face_el = -ne_flux / nref / core_profiles.ne.face_grad() / geo.g1_over_vpr_face
-    chi_face_el = -Te_flux / nref / CONSTANTS.keV2J / core_profiles.temp_el.face_grad() / core_profiles.ne.face_value() / geo.g1_over_vpr_face
+    d_face_el    = -ne_flux / nref / core_profiles.ne.face_grad() / geo.g1_over_vpr_face
+    chi_face_el  = -Te_flux / nref / CONSTANTS.keV2J / core_profiles.temp_el.face_grad()  / core_profiles.ne.face_value() / geo.g1_over_vpr_face
     chi_face_ion = -Ti_flux / nref / CONSTANTS.keV2J / core_profiles.temp_ion.face_grad() / core_profiles.ne.face_value() / geo.g1_over_vpr_face
     d_face_el = jnp.concatenate([
         jnp.array([d_face_el[1]]),
