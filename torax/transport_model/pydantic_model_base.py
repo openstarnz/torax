@@ -65,16 +65,16 @@ class TransportBase(torax_pydantic.BaseModelFrozen, abc.ABC):
   apply_inner_patch: interpolated_param_1d.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(False)
   )
-  De_inner: torax_pydantic.PositiveTimeVaryingScalar = (
+  De_inner: torax_pydantic.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(0.2)
   )
   Ve_inner: interpolated_param_1d.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(0.0)
   )
-  chii_inner: torax_pydantic.PositiveTimeVaryingScalar = (
+  chii_inner: torax_pydantic.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(1.0)
   )
-  chie_inner: torax_pydantic.PositiveTimeVaryingScalar = (
+  chie_inner: torax_pydantic.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(1.0)
   )
   rho_inner: torax_pydantic.UnitIntervalTimeVaryingScalar = (
@@ -83,16 +83,16 @@ class TransportBase(torax_pydantic.BaseModelFrozen, abc.ABC):
   apply_outer_patch: interpolated_param_1d.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(False)
   )
-  De_outer: interpolated_param_1d.PositiveTimeVaryingScalar = (
+  De_outer: interpolated_param_1d.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(0.2)
   )
   Ve_outer: interpolated_param_1d.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(0.0)
   )
-  chii_outer: interpolated_param_1d.PositiveTimeVaryingScalar = (
+  chii_outer: interpolated_param_1d.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(1.0)
   )
-  chie_outer: interpolated_param_1d.PositiveTimeVaryingScalar = (
+  chie_outer: interpolated_param_1d.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(1.0)
   )
   rho_outer: torax_pydantic.UnitIntervalTimeVaryingScalar = (

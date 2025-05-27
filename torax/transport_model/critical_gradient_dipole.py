@@ -159,9 +159,21 @@ class CriticalGradientDipoleModel(transport_model.TransportModel):
     d_face_el = -ne_flux / nref / core_profiles.ne.face_grad() / geo.g1_over_vpr_face
     chi_face_el = -Te_flux / nref / CONSTANTS.keV2J / core_profiles.temp_el.face_grad() / core_profiles.ne.face_value() / geo.g1_over_vpr_face
     chi_face_ion = -Ti_flux / nref / CONSTANTS.keV2J / core_profiles.temp_ion.face_grad() / core_profiles.ne.face_value() / geo.g1_over_vpr_face
-    d_face_el = jnp.nan_to_num(d_face_el, nan=0.0)
-    chi_face_el = jnp.nan_to_num(chi_face_el, nan=0.0)
-    chi_face_ion = jnp.nan_to_num(chi_face_ion, nan=0.0)
+    d_face_el = jnp.concatenate([
+        jnp.array([d_face_el[1]]),
+        d_face_el[1:-1],
+        jnp.array([d_face_el[-2]]),
+    ])
+    chi_face_el = jnp.concatenate([
+        jnp.array([chi_face_el[1]]),
+        chi_face_el[1:-1],
+        jnp.array([chi_face_el[-2]]),
+    ])
+    chi_face_ion = jnp.concatenate([
+        jnp.array([chi_face_ion[1]]),
+        chi_face_ion[1:-1],
+        jnp.array([chi_face_ion[-2]]),
+    ])
     return state.CoreTransport(
         chi_face_ion=chi_face_ion,
         chi_face_el=chi_face_el,
