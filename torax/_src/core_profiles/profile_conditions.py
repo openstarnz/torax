@@ -50,7 +50,9 @@ class RuntimeParams:
 
   Ip: array_typing.FloatScalar
   v_loop_lcfs: array_typing.FloatScalar
+  T_i_left_bc: array_typing.FloatScalar
   T_i_right_bc: array_typing.FloatScalar
+  T_e_left_bc: array_typing.FloatScalar
   T_e_right_bc: array_typing.FloatScalar
   # Temperature profiles defined on the cell grid.
   T_e: array_typing.FloatVector
@@ -64,6 +66,8 @@ class RuntimeParams:
   n_e: array_typing.FloatVector
   nbar: array_typing.FloatScalar
   n_e_nbar_is_fGW: bool
+  n_e_left_bc: array_typing.FloatScalar
+  n_e_left_bc_is_fGW: bool
   n_e_right_bc: array_typing.FloatScalar
   n_e_right_bc_is_fGW: bool
   current_profile_nu: float
@@ -75,6 +79,7 @@ class RuntimeParams:
   use_v_loop_lcfs_boundary_condition: bool = dataclasses.field(
       metadata={'static': True}
   )
+  n_e_left_bc_is_absolute: bool = dataclasses.field(metadata={'static': True})
   n_e_right_bc_is_absolute: bool = dataclasses.field(metadata={'static': True})
   initial_psi_mode: InitialPsiMode = dataclasses.field(
       metadata={'static': True}
@@ -162,7 +167,9 @@ class ProfileConditions(torax_pydantic.BaseModelFrozen):
   v_loop_lcfs: torax_pydantic.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(0.0)
   )
+  T_i_left_bc: torax_pydantic.PositiveTimeVaryingScalar | None = None
   T_i_right_bc: torax_pydantic.PositiveTimeVaryingScalar | None = None
+  T_e_left_bc: torax_pydantic.PositiveTimeVaryingScalar | None = None
   T_e_right_bc: torax_pydantic.PositiveTimeVaryingScalar | None = None
   T_i: torax_pydantic.PositiveTimeVaryingArray = (
       torax_pydantic.ValidatedDefault({0: {0: 15.0, 1: 1.0}})
@@ -184,7 +191,9 @@ class ProfileConditions(torax_pydantic.BaseModelFrozen):
       0.85e20
   )
   n_e_nbar_is_fGW: bool = False
+  n_e_left_bc: torax_pydantic.TimeVaryingScalar | None = None
   n_e_right_bc: torax_pydantic.TimeVaryingScalar | None = None
+  n_e_left_bc_is_fGW: bool = False
   n_e_right_bc_is_fGW: bool = False
   current_profile_nu: float = 1.0
   initial_j_is_total_current: Annotated[bool, torax_pydantic.JAX_STATIC] = False
