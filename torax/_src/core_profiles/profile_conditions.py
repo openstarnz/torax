@@ -411,10 +411,9 @@ class ProfileConditions(torax_pydantic.BaseModelFrozen):
     }
 
     if self.T_e_left_bc is None:
-      runtime_params['T_e_left_bc'] = 0.1
-      # runtime_params['T_e_left_bc'] = self.T_e.get_value(
-      #     t, grid_type='face_left'
-      # )
+      runtime_params['T_e_left_bc'] = self.T_e.get_value(
+          t, grid_type='face_left'
+      )
 
     if self.T_e_right_bc is None:
       runtime_params['T_e_right_bc'] = self.T_e.get_value(
@@ -422,10 +421,9 @@ class ProfileConditions(torax_pydantic.BaseModelFrozen):
       )
 
     if self.T_i_left_bc is None:
-      runtime_params['T_i_left_bc'] = 0.1
-      # runtime_params['T_i_left_bc'] = self.T_i.get_value(
-      #     t, grid_type='face_left'
-      # )
+      runtime_params['T_i_left_bc'] = self.T_i.get_value(
+          t, grid_type='face_left'
+      )
 
     if self.T_i_right_bc is None:
       runtime_params['T_i_right_bc'] = self.T_i.get_value(
@@ -441,7 +439,6 @@ class ProfileConditions(torax_pydantic.BaseModelFrozen):
         )
 
     if self.n_e_left_bc is None:
-      # runtime_params['n_e_left_bc'] = 0.1
       runtime_params['n_e_left_bc'] = self.n_e.get_value(
           t, grid_type='face_left'
       )

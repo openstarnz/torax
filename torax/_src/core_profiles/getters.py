@@ -78,9 +78,8 @@ def get_updated_ion_temperature(
   T_i = cell_variable.CellVariable(
       value=value,
       face_centers=geo.rho_face_norm,
-      left_face_grad_constraint=jnp.zeros(()),
-      # left_face_grad_constraint=None,
-      # left_face_constraint=profile_conditions_params.T_i_left_bc,
+      left_face_grad_constraint=None,
+      left_face_constraint=profile_conditions_params.T_i_left_bc,
       right_face_grad_constraint=None,
       right_face_constraint=profile_conditions_params.T_i_right_bc,
   )
@@ -107,9 +106,8 @@ def get_updated_electron_temperature(
   T_e = cell_variable.CellVariable(
       value=value,
       face_centers=geo.rho_face_norm,
-      left_face_grad_constraint=jnp.zeros(()),
-      # left_face_grad_constraint=None,
-      # left_face_constraint=profile_conditions_params.T_e_left_bc,
+      left_face_grad_constraint=None,
+      left_face_constraint=profile_conditions_params.T_e_left_bc,
       right_face_grad_constraint=None,
       right_face_constraint=profile_conditions_params.T_e_right_bc,
   )
@@ -132,13 +130,13 @@ def get_updated_electron_density(
       * 1e20
   )
 
-  # assert not profile_conditions_params.normalize_n_e_to_nbar
+  assert not profile_conditions_params.normalize_n_e_to_nbar
 
-  # n_e_left_bc = jnp.where(
-  #     profile_conditions_params.n_e_left_bc_is_fGW,
-  #     profile_conditions_params.n_e_left_bc * nGW,
-  #     profile_conditions_params.n_e_left_bc,
-  # )
+  n_e_left_bc = jnp.where(
+      profile_conditions_params.n_e_left_bc_is_fGW,
+      profile_conditions_params.n_e_left_bc * nGW,
+      profile_conditions_params.n_e_left_bc,
+  )
 
   # Calculate n_e_right_bc.
   n_e_right_bc = jnp.where(
@@ -213,8 +211,8 @@ def get_updated_electron_density(
   n_e = cell_variable.CellVariable(
       value=value,
       face_centers=geo.rho_face_norm,
-      # left_face_grad_constraint=None,
-      # left_face_constraint=n_e_left_bc,
+      left_face_grad_constraint=None,
+      left_face_constraint=n_e_left_bc,
       right_face_grad_constraint=None,
       right_face_constraint=n_e_right_bc,
   )

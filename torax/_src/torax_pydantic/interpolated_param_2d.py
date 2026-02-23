@@ -171,6 +171,7 @@ class TimeVaryingArray(model_base.BaseModelFrozen):
         # Save out the cached interpolated params.
         self.get_cached_interpolated_param_cell,
         self.get_cached_interpolated_param_face,
+        self.get_cached_interpolated_param_face_left,
         self.get_cached_interpolated_param_face_right,
     )
     aux_data = (
@@ -193,7 +194,8 @@ class TimeVaryingArray(model_base.BaseModelFrozen):
     # pylint: disable=protected-access
     obj.get_cached_interpolated_param_cell = children[1]
     obj.get_cached_interpolated_param_face = children[2]
-    obj.get_cached_interpolated_param_face_right = children[3]
+    obj.get_cached_interpolated_param_face_left = children[3]
+    obj.get_cached_interpolated_param_face_right = children[4]
     # pylint: enable=protected-access
     return obj
 
@@ -270,6 +272,11 @@ class TimeVaryingArray(model_base.BaseModelFrozen):
       face_value = _vmap_interp(
           self.grid.face_centers, replace_value.rho_norm, replace_value.value
       )
+      face_left_value = _vmap_interp(
+          self.grid.face_centers[0],
+          replace_value.rho_norm,
+          replace_value.value,
+      )
       face_right_value = _vmap_interp(
           self.grid.face_centers[-1],
           replace_value.rho_norm,
@@ -278,17 +285,18 @@ class TimeVaryingArray(model_base.BaseModelFrozen):
     else:
       cell_value = self.get_cached_interpolated_param_cell.ys
       face_value = self.get_cached_interpolated_param_face.ys
+      face_left_value = self.get_cached_interpolated_param_face_left.ys
       face_right_value = self.get_cached_interpolated_param_face_right.ys
 
     # All of these should have a leading `time` dimension.
     chex.assert_tree_shape_prefix(
-        (time, cell_value, face_value, face_right_value), time.shape
+        (time, cell_value, face_value, face_left_value, face_right_value), time.shape
     )
 
     def get_leaves(
         x: typing_extensions.Self,
     ) -> tuple[
-        chex.Array, chex.Array, chex.Array, chex.Array, chex.Array, chex.Array
+        chex.Array, chex.Array, chex.Array, chex.Array, chex.Array, chex.Array, chex.Array, chex.Array
     ]:
       # We need to update the time (xs) and value (ys) arrays for all
       # cached interpolated params.
@@ -297,6 +305,8 @@ class TimeVaryingArray(model_base.BaseModelFrozen):
           x.get_cached_interpolated_param_cell.ys,
           x.get_cached_interpolated_param_face.xs,
           x.get_cached_interpolated_param_face.ys,
+          x.get_cached_interpolated_param_face_left.xs,
+          x.get_cached_interpolated_param_face_left.ys,
           x.get_cached_interpolated_param_face_right.xs,
           x.get_cached_interpolated_param_face_right.ys,
       )
@@ -304,7 +314,7 @@ class TimeVaryingArray(model_base.BaseModelFrozen):
     return eqx.tree_at(
         get_leaves,
         self,
-        (time, cell_value, time, face_value, time, face_right_value),
+        (time, cell_value, time, face_value, time, face_left_value, time, face_right_value),
     )
 
   def __eq__(self, other: typing_extensions.Self):
