@@ -311,6 +311,11 @@ def _override_initial_runtime_params_from_file(
       .sel(rho_norm=profiles_ds.coords[output.RHO_CELL_NORM])
       .to_numpy()
   )
+  # runtime_params.profile_conditions.T_e_left_bc = (
+  #     profiles_ds.data_vars[output.T_E]
+  #     .sel(rho_norm=profiles_ds.coords[output.RHO_FACE_NORM][0])
+  #     .to_numpy()
+  # )
   runtime_params.profile_conditions.T_e_right_bc = (
       profiles_ds.data_vars[output.T_E]
       .sel(rho_norm=profiles_ds.coords[output.RHO_FACE_NORM][-1])
@@ -321,6 +326,11 @@ def _override_initial_runtime_params_from_file(
       .sel(rho_norm=profiles_ds.coords[output.RHO_CELL_NORM])
       .to_numpy()
   )
+  # runtime_params.profile_conditions.T_i_left_bc = (
+  #     profiles_ds.data_vars[output.T_I]
+  #     .sel(rho_norm=profiles_ds.coords[output.RHO_FACE_NORM][0])
+  #     .to_numpy()
+  # )
   runtime_params.profile_conditions.T_i_right_bc = (
       profiles_ds.data_vars[output.T_I]
       .sel(rho_norm=profiles_ds.coords[output.RHO_FACE_NORM][-1])
@@ -332,6 +342,11 @@ def _override_initial_runtime_params_from_file(
       .sel(rho_norm=profiles_ds.coords[output.RHO_CELL_NORM])
       .to_numpy()
   )
+  # runtime_params.profile_conditions.n_e_left_bc = (
+  #     profiles_ds.data_vars[output.N_E]
+  #     .sel(rho_norm=profiles_ds.coords[output.RHO_FACE_NORM][0])
+  #     .to_numpy()
+  # )
   runtime_params.profile_conditions.n_e_right_bc = (
       profiles_ds.data_vars[output.N_E]
       .sel(rho_norm=profiles_ds.coords[output.RHO_FACE_NORM][-1])
@@ -346,8 +361,10 @@ def _override_initial_runtime_params_from_file(
   # Both ne and the boundary condition are given in absolute values (not fGW).
   # Additionally we want to avoid normalizing to nbar.
   runtime_params.profile_conditions.n_e_right_bc_is_fGW = False
+  # runtime_params.profile_conditions.n_e_left_bc_is_fGW = False
   runtime_params.profile_conditions.n_e_nbar_is_fGW = False
   runtime_params.profile_conditions.normalize_n_e_to_nbar = False
   runtime_params.profile_conditions.n_e_right_bc_is_absolute = True
+  # runtime_params.profile_conditions.n_e_left_bc_is_absolute = True
 
   return runtime_params, geo
