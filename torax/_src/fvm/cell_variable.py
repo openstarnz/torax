@@ -279,9 +279,14 @@ class CellVariable:
       # Boundary value has one fewer dim than cell value, expand to concat with.
       value = jnp.expand_dims(value, axis=-1)
     else:
-      # When there is no constraint, leftmost face equals
-      # leftmost cell
-      value = self.value[..., 0:1]
+      # Maintain left_face consistent with left_face_grad_constraint
+      dr = self.cell_widths[0]
+      value = (
+          self.value[..., :1]
+          - jnp.expand_dims(self.left_face_grad_constraint, axis=-1)
+          * jnp.expand_dims(dr, axis=-1)
+          / 2
+      )
     return value
 
   @functools.cached_property

@@ -118,6 +118,11 @@ def geometry_from_IMAS(
         f"{len(equilibrium.time_slice)} time slices"
     )
   IMAS_data = equilibrium.time_slice[slice_index]
+  assert IMAS_data.boundary.minor_radius.has_value
+  assert IMAS_data.boundary.type.has_value
+  assert IMAS_data.global_quantities.magnetic_axis.z.has_value
+  assert IMAS_data.global_quantities.ip.has_value
+
   R_major = np.asarray(equilibrium.vacuum_toroidal_field.r0)
   B_0 = np.asarray(np.abs(equilibrium.vacuum_toroidal_field.b0[0]))
 
