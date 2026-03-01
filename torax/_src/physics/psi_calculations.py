@@ -540,8 +540,8 @@ def j_parallel_to_j_toroidal(
   integral_face = jnp.concatenate([
       jnp.array([0.0]),
       # cumulative_cell_integration integrates wrt rho_norm, so we multiply by
-      # rho_b to convert to integration wrt rho
-      math_utils.cumulative_cell_integration(integrand_cell * geo.rho_b, geo),
+      # rho_out - rho_in to convert to integration wrt rho
+      math_utils.cumulative_cell_integration(integrand_cell * (geo.rho_out - geo.rho_in), geo),
   ])
 
   # Plasma current on the face grid
