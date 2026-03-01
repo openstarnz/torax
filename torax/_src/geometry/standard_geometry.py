@@ -222,7 +222,7 @@ class StandardGeometryIntermediates:
   B_0: array_typing.FloatScalar
   psi: array_typing.Array
   Ip_profile: array_typing.Array
-  Phi: array_typing.Array
+  rho: array_typing.Array
   R_in: array_typing.Array
   R_out: array_typing.Array
   F: array_typing.Array
@@ -258,11 +258,10 @@ class StandardGeometryIntermediates:
       filter with an appropriate polynominal order based on the attribute.
     """
 
+    rhon = (self.rho - self.rho[0]) / (self.rho[-1] - self.rho[0])
+
     # Check if last flux surface is diverted and correct via spline fit if so
     if self.diverted or self.flux_surf_avg_grad_psi2_over_R2[-1] < 1e-10:
-      # Calculate rhon
-      rhon = np.sqrt(self.Phi / self.Phi[-1])
-
       # Create a lambda function for the Cubic spline fit.
       spline = lambda rho, data, x, bc_type: scipy.interpolate.CubicSpline(
           rho[:-1],
@@ -306,21 +305,22 @@ class StandardGeometryIntermediates:
       self.vpr[-1] = set_edge(self.vpr)
 
     # Near-axis smoothing of quantities with known near-axis trends with rho
-    rhon = np.sqrt(self.Phi / self.Phi[-1])
-    idx_limit = np.argmin(np.abs(rhon - _RHO_SMOOTHING_LIMIT))
+    # rhon = np.sqrt(self.Phi / self.Phi[-1])
+    # idx_limit = np.argmin(np.abs(rhon - _RHO_SMOOTHING_LIMIT))
 
     # Bp goes like rho near-axis. So Bp2 terms are smoothed with order 2,
     # and Bp terms with order 1. vpr also goes like rho near-axis
-    self.flux_surf_avg_grad_psi2_over_R2[:] = _smooth_savgol(
-        self.flux_surf_avg_grad_psi2_over_R2, idx_limit, 2
-    )
-    self.flux_surf_avg_grad_psi2[:] = _smooth_savgol(
-        self.flux_surf_avg_grad_psi2, idx_limit, 2
-    )
-    self.flux_surf_avg_grad_psi[:] = _smooth_savgol(
-        self.flux_surf_avg_grad_psi, idx_limit, 1
-    )
-    self.vpr[:] = _smooth_savgol(self.vpr, idx_limit, 1)
+    # TODO: I should check these trends for dipoles
+    # self.flux_surf_avg_grad_psi2_over_R2[:] = _smooth_savgol(
+    #     self.flux_surf_avg_grad_psi2_over_R2, idx_limit, 2
+    # )
+    # self.flux_surf_avg_grad_psi2[:] = _smooth_savgol(
+    #     self.flux_surf_avg_grad_psi2, idx_limit, 2
+    # )
+    # self.flux_surf_avg_grad_psi[:] = _smooth_savgol(
+    #     self.flux_surf_avg_grad_psi, idx_limit, 1
+    # )
+    # self.vpr[:] = _smooth_savgol(self.vpr, idx_limit, 1)
 
 
 def build_standard_geometry(
@@ -338,8 +338,10 @@ def build_standard_geometry(
   """
 
   # Toroidal flux coordinates
-  rho_intermediate = np.sqrt(intermediates.Phi / (np.pi * intermediates.B_0))
-  rho_norm_intermediate = rho_intermediate / rho_intermediate[-1]
+  rho_norm_intermediate = (intermediates.rho - intermediates.rho[0]) / (
+      intermediates.rho[-1] - intermediates.rho[0]
+  )
+  Phi = intermediates.B_0 * np.pi * intermediates.rho**2
 
   # derived geometric quantities
   dV_dpsi = intermediates.int_dl_over_Bp
@@ -356,7 +358,7 @@ def build_standard_geometry(
   # Ip profile. Needed since input psi profile may have noisy second derivatives
   dpsidrhon = (
       intermediates.Ip_profile[1:]
-      * (16 * constants.CONSTANTS.mu_0 * np.pi**3 * intermediates.Phi[-1])
+      * (16 * constants.CONSTANTS.mu_0 * np.pi**3 * Phi[-1])
       / (g2g3_over_rhon[1:] * intermediates.F[1:])
   )
   dpsidrhon = np.concatenate((np.zeros(1), dpsidrhon))
@@ -371,7 +373,7 @@ def build_standard_geometry(
   # set Ip-consistent psi derivative boundary condition (although will be
   # replaced later with an fvm constraint)
   psi_from_Ip[-1] = psi_from_Ip[-2] + (
-      16 * constants.CONSTANTS.mu_0 * np.pi**3 * intermediates.Phi[-1]
+      16 * constants.CONSTANTS.mu_0 * np.pi**3 * Phi[-1]
   ) * intermediates.Ip_profile[-1] / (
       g2g3_over_rhon[-1] * intermediates.F[-1]
   ) * (
@@ -404,7 +406,6 @@ def build_standard_geometry(
   # fill geometry structure
   # normalized grid
   mesh = torax_pydantic.Grid1D(face_centers=intermediates.face_centers)
-  rho_b = rho_intermediate[-1]  # radius denormalization constant
   # helper variables for mesh cells and faces
   rho_face_norm = mesh.face_centers
   rho_norm = mesh.cell_centers
@@ -414,7 +415,6 @@ def build_standard_geometry(
   rho_hires_norm = geometry.increase_grid_resolution(
       rho_face_norm, intermediates.hires_factor
   )
-  rho_hires = rho_hires_norm * rho_b
 
   rhon_interpolation_func = lambda x, y: np.interp(x, rho_norm_intermediate, y)
   # V' for volume integrations on face grid
@@ -444,9 +444,6 @@ def build_standard_geometry(
   elongation_face = rhon_interpolation_func(
       rho_face_norm, intermediates.elongation
   )
-
-  Phi_face = rhon_interpolation_func(rho_face_norm, intermediates.Phi)
-  Phi = rhon_interpolation_func(rho_norm, intermediates.Phi)
 
   F_face = rhon_interpolation_func(rho_face_norm, intermediates.F)
   F = rhon_interpolation_func(rho_norm, intermediates.F)
@@ -503,8 +500,8 @@ def build_standard_geometry(
   return StandardGeometry(
       geometry_type=intermediates.geometry_type,
       torax_mesh=mesh,
-      Phi=Phi,
-      Phi_face=Phi_face,
+      rho_in=intermediates.rho[0],
+      rho_out=intermediates.rho[-1],
       R_major=intermediates.R_major,
       a_minor=intermediates.a_minor,
       B_0=intermediates.B_0,
@@ -552,7 +549,6 @@ def build_standard_geometry(
       elongation_face=elongation_face,
       spr_hires=spr_hires,
       rho_hires_norm=rho_hires_norm,
-      rho_hires=rho_hires,
       # always initialize Phibdot as zero. It will be replaced once both geo_t
       # and geo_t_plus_dt are provided, and set to be the same for geo_t and
       # geo_t_plus_dt for each given time interval.

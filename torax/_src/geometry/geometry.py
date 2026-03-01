@@ -183,8 +183,8 @@ class Geometry:
 
   geometry_type: GeometryType
   torax_mesh: torax_pydantic.Grid1D
-  Phi: array_typing.Array
-  Phi_face: array_typing.Array
+  rho_in: array_typing.Array
+  rho_out: array_typing.Array
   R_major: array_typing.FloatScalar
   a_minor: array_typing.FloatScalar
   B_0: array_typing.FloatScalar
@@ -223,7 +223,6 @@ class Geometry:
   R_out_face: array_typing.Array
   spr_hires: array_typing.Array
   rho_hires_norm: array_typing.Array
-  rho_hires: array_typing.Array
   Phi_b_dot: array_typing.FloatScalar
   _z_magnetic_axis: array_typing.FloatScalar | None
 
@@ -264,7 +263,7 @@ class Geometry:
   @property
   def rho_face(self) -> array_typing.Array:
     r"""Toroidal flux coordinate on face grid :math:`\mathrm{m}`."""
-    return self.rho_face_norm * jnp.expand_dims(self.rho_b, axis=-1)
+    return self.rho_face_norm * jnp.expand_dims(self.rho_out - self.rho_in, axis=-1) + jnp.expand_dims(self.rho_in, axis=-1)
 
   @property
   def rho(self) -> array_typing.Array:
@@ -275,7 +274,7 @@ class Geometry:
     toroidal flux enclosed by the flux surface, and :math:`B_0` the magnetic
     field on the magnetic axis.
     """
-    return self.rho_norm * jnp.expand_dims(self.rho_b, axis=-1)
+    return self.rho_norm * jnp.expand_dims(self.rho_out - self.rho_in, axis=-1) + jnp.expand_dims(self.rho_in, axis=-1)
 
   @property
   def r_mid(self) -> array_typing.Array:
@@ -302,17 +301,12 @@ class Geometry:
   @property
   def drho(self) -> array_typing.Array:
     """Cell widths [m]."""
-    return self.drho_norm * jnp.expand_dims(self.rho_b, axis=-1)
-
-  @property
-  def rho_b(self) -> array_typing.FloatScalar:
-    """Toroidal flux coordinate [m] at boundary (LCFS)."""
-    return jnp.sqrt(self.Phi_b / np.pi / self.B_0)
+    return self.drho_norm * jnp.expand_dims(self.rho_out - self.rho_in, axis=-1)
 
   @property
   def Phi_b(self) -> array_typing.FloatScalar:
     r"""Toroidal flux at boundary (LCFS) :math:`\mathrm{Wb}`."""
-    return self.Phi_face[..., -1]
+    return jnp.pi * self.B_0 * self.rho_out**2
 
   @property
   def g1_over_vpr(self) -> array_typing.Array:
@@ -327,32 +321,17 @@ class Geometry:
   @property
   def g0_over_vpr_face(self) -> jax.Array:
     """g0_face/vpr_face [:math:`m^{-1}`], equal to 1/rho_b on-axis."""
-    # Calculate the bulk of the array (excluding the first element)
-    # to avoid division by zero.
-    bulk = self.g0_face[..., 1:] / self.vpr_face[..., 1:]
-    first_element = jnp.ones_like(self.rho_b) / self.rho_b
-    # Concatenate to handle both 1D (no leading dim) and 2D cases
-    return jnp.concatenate(
-        [jnp.expand_dims(first_element, axis=-1), bulk], axis=-1
-    )
+    return self.g0_face / self.vpr_face
 
   @property
   def g1_over_vpr_face(self) -> jax.Array:
     r"""g1_face/vpr_face [:math:`\mathrm{m}`]. Zero on-axis."""
-    bulk = self.g1_face[..., 1:] / self.vpr_face[..., 1:]
-    first_element = jnp.zeros_like(self.rho_b)
-    return jnp.concatenate(
-        [jnp.expand_dims(first_element, axis=-1), bulk], axis=-1
-    )
+    return self.g1_face / self.vpr_face
 
   @property
   def g1_over_vpr2_face(self) -> jax.Array:
     """g1_face/vpr_face**2 [:math:`m^{-2}`], equal to 1/rho_b**2 on-axis."""
-    bulk = self.g1_face[..., 1:] / self.vpr_face[..., 1:] ** 2
-    first_element = jnp.ones_like(self.rho_b) / self.rho_b**2
-    return jnp.concatenate(
-        [jnp.expand_dims(first_element, axis=-1), bulk], axis=-1
-    )
+    return self.g1_face / self.vpr_face**2
 
   @property
   def gm9(self) -> jax.Array:

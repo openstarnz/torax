@@ -118,6 +118,7 @@ def geometry_from_IMAS(
         f"{len(equilibrium.time_slice)} time slices"
     )
   IMAS_data = equilibrium.time_slice[slice_index]
+  assert equilibrium.vacuum_toroidal_field.r0.has_value
   assert IMAS_data.boundary.minor_radius.has_value
   assert IMAS_data.boundary.type.has_value
   assert IMAS_data.global_quantities.magnetic_axis.z.has_value
@@ -148,17 +149,18 @@ def geometry_from_IMAS(
         IMAS_data.profiles_1d.volume, IMAS_data.profiles_1d.psi
     )
   # dpsi_drho_tor
+  rho_tor = IMAS_data.profiles_1d.rho_tor
+  if not rho_tor:
+    if B_0 is None or not IMAS_data.profiles_1d.phi:
+      raise ValueError(
+          "rho_tor not provided and cannot be calculated from given"
+          " equilibrium IDS"
+      )
+    rho_tor = np.sqrt(IMAS_data.profiles_1d.phi / (np.pi * B_0))
+
   if IMAS_data.profiles_1d.dpsi_drho_tor:
     dpsidrhotor = np.abs(IMAS_data.profiles_1d.dpsi_drho_tor)
   else:
-    rho_tor = IMAS_data.profiles_1d.rho_tor
-    if not rho_tor:
-      if B_0 is None or not IMAS_data.profiles_1d.phi:
-        raise ValueError(
-            "rho_tor not provided and cannot be calculated from given"
-            " equilibrium IDS"
-        )
-      rho_tor = np.sqrt(IMAS_data.profiles_1d.phi / (np.pi * B_0))
     dpsidrhotor = np.gradient(IMAS_data.profiles_1d.psi, rho_tor)
 
   flux_surf_avg_grad_psi = IMAS_data.profiles_1d.gm7 * dpsidrhotor
@@ -186,12 +188,6 @@ def geometry_from_IMAS(
   jtor = -1 * IMAS_data.profiles_1d.j_phi
   rhon = IMAS_data.profiles_1d.rho_tor_norm
   if not rhon:
-    if B_0 is None or not IMAS_data.profiles_1d.phi:
-      raise ValueError(
-          "rho_tor_norm not provided and cannot be calculated from given"
-          " equilibrium IDS"
-      )
-    rho_tor = np.sqrt(IMAS_data.profiles_1d.phi / (np.pi * B_0))
     rhon = rho_tor / rho_tor[-1]
   vpr = 4 * np.pi * phi[-1] * rhon / (F * flux_surf_avg_1_over_R2)
   spr = vpr * flux_surf_avg_1_over_R / (2 * np.pi)
@@ -219,7 +215,7 @@ def geometry_from_IMAS(
       "B_0": B_0,
       "psi": psi,
       "Ip_profile": Ip_profile,
-      "Phi": phi,
+      "rho": rho_tor,
       "R_in": R_in,
       "R_out": R_out,
       "F": F,

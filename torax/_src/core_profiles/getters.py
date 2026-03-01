@@ -288,7 +288,8 @@ class _IonProperties:
   Z_impurity_face: array_typing.FloatVectorFace
   Z_eff: array_typing.FloatVectorCell
   dilution_factor: array_typing.FloatVectorCell
-  dilution_factor_edge: array_typing.FloatScalar
+  dilution_factor_inner_edge: array_typing.FloatScalar
+  dilution_factor_outer_edge: array_typing.FloatScalar
   impurity_fractions: Mapping[str, array_typing.FloatVectorCell]
   charge_state_info: charge_states.ChargeStateInfo
   charge_state_info_face: charge_states.ChargeStateInfo
@@ -319,18 +320,26 @@ def _get_ion_properties_from_fractions(
   Z_impurity_face = charge_state_info_face.Z_mixture
 
   Z_eff = Z_eff_from_config
-  Z_eff_edge = Z_eff_face_from_config[-1]
+  Z_eff_inner_edge = Z_eff_face_from_config[0]
+  Z_eff_outer_edge = Z_eff_face_from_config[-1]
 
   dilution_factor = jnp.where(
       Z_eff == 1.0,
       1.0,
       formulas.calculate_main_ion_dilution_factor(Z_i, Z_impurity, Z_eff),
   )
-  dilution_factor_edge = jnp.where(
-      Z_eff_edge == 1.0,
+  dilution_factor_inner_edge = jnp.where(
+      Z_eff_inner_edge == 1.0,
       1.0,
       formulas.calculate_main_ion_dilution_factor(
-          Z_i_face[-1], Z_impurity_face[-1], Z_eff_edge
+          Z_i_face[0], Z_impurity_face[0], Z_eff_inner_edge
+      ),
+  )
+  dilution_factor_outer_edge = jnp.where(
+      Z_eff_outer_edge == 1.0,
+      1.0,
+      formulas.calculate_main_ion_dilution_factor(
+          Z_i_face[-1], Z_impurity_face[-1], Z_eff_outer_edge
       ),
   )
   return _IonProperties(
@@ -340,7 +349,8 @@ def _get_ion_properties_from_fractions(
       Z_impurity_face=Z_impurity_face,
       Z_eff=Z_eff,
       dilution_factor=dilution_factor,
-      dilution_factor_edge=dilution_factor_edge,
+      dilution_factor_inner_edge=dilution_factor_inner_edge,
+      dilution_factor_outer_edge=dilution_factor_outer_edge,
       impurity_fractions=impurity_params.fractions,
       charge_state_info=charge_state_info,
       charge_state_info_face=charge_state_info_face,
@@ -377,7 +387,18 @@ def _get_ion_properties_from_n_e_ratios(
       )
       / Z_i
   )
-  dilution_factor_edge = (
+  dilution_factor_inner_edge = (
+      1
+      - jnp.sum(
+          jnp.array([
+              average_charge_state_face.Z_per_species[ion][0] * n_e_ratio[0]
+              for ion, n_e_ratio in impurity_params.n_e_ratios_face.items()
+          ]),
+          axis=0,
+      )
+      / Z_i_face[0]
+  )
+  dilution_factor_outer_edge = (
       1
       - jnp.sum(
           jnp.array([
@@ -403,7 +424,8 @@ def _get_ion_properties_from_n_e_ratios(
       Z_impurity_face=Z_impurity_face,
       Z_eff=Z_eff,
       dilution_factor=dilution_factor,
-      dilution_factor_edge=dilution_factor_edge,
+      dilution_factor_inner_edge=dilution_factor_inner_edge,
+      dilution_factor_outer_edge=dilution_factor_outer_edge,
       impurity_fractions=impurity_params.fractions,
       charge_state_info=average_charge_state,
       charge_state_info_face=average_charge_state_face,
@@ -595,7 +617,8 @@ def _get_ion_properties_from_n_e_ratios_Z_eff(
       Z_impurity_face=Z_impurity_face,
       Z_eff=Z_eff_from_config,
       dilution_factor=dilution_factor,
-      dilution_factor_edge=dilution_factor_face[-1],
+      dilution_factor_inner_edge=dilution_factor_face[0],
+      dilution_factor_outer_edge=dilution_factor_face[-1],
       impurity_fractions=fractions,
       charge_state_info=charge_state_info,
       charge_state_info_face=charge_state_info_face,
@@ -691,9 +714,11 @@ def get_updated_ions(
   n_i = cell_variable.CellVariable(
       value=n_e.value * ion_properties.dilution_factor,
       face_centers=geo.rho_face_norm,
+      left_face_grad_constraint=None,
+      left_face_constraint=n_e.left_face_constraint * ion_properties.dilution_factor_inner_edge,
       right_face_grad_constraint=None,
       right_face_constraint=n_e.right_face_constraint
-      * ion_properties.dilution_factor_edge,
+      * ion_properties.dilution_factor_outer_edge,
   )
 
   n_impurity_value = jnp.where(
@@ -702,8 +727,15 @@ def get_updated_ions(
       (n_e.value - n_i.value * Z_i) / ion_properties.Z_impurity,
   )
 
+  n_impurity_left_face_constraint = jnp.where(
+      ion_properties.dilution_factor_inner_edge == 1.0,
+      0.0,
+      (n_e.left_face_constraint - n_i.left_face_constraint * Z_i_face[0])
+      / ion_properties.Z_impurity_face[0],
+  )
+
   n_impurity_right_face_constraint = jnp.where(
-      ion_properties.dilution_factor_edge == 1.0,
+      ion_properties.dilution_factor_outer_edge == 1.0,
       0.0,
       (n_e.right_face_constraint - n_i.right_face_constraint * Z_i_face[-1])
       / ion_properties.Z_impurity_face[-1],
@@ -712,6 +744,8 @@ def get_updated_ions(
   n_impurity = cell_variable.CellVariable(
       value=n_impurity_value,
       face_centers=geo.rho_face_norm,
+      left_face_grad_constraint=None,
+      left_face_constraint=n_impurity_left_face_constraint,
       right_face_grad_constraint=None,
       right_face_constraint=n_impurity_right_face_constraint,
   )
