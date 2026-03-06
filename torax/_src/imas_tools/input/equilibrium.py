@@ -187,9 +187,10 @@ def geometry_from_IMAS(
   # -> Ip_profile = integrate(y = spr * jtor, x= rhon, initial = 0.0)
   jtor = -1 * IMAS_data.profiles_1d.j_phi
   rhon = IMAS_data.profiles_1d.rho_tor_norm
-  if not rhon:
-    rhon = rho_tor / rho_tor[-1]
-  vpr = 4 * np.pi * phi[-1] * rhon / (F * flux_surf_avg_1_over_R2)
+  assert rhon.has_value
+  vpr = IMAS_data.profiles_1d.dvolume_drho_tor
+  assert vpr.has_value
+  vpr = np.asarray(vpr) * (rho_tor[-1] - rho_tor[0])
   spr = vpr * flux_surf_avg_1_over_R / (2 * np.pi)
 
   # This Ip_profile by integration results in a minor discrepancy between this
